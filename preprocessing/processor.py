@@ -4,7 +4,6 @@ import pandas as pd
 import wfdb
 import argparse
 from scipy.signal import butter, filtfilt, iirnotch, resample
-import h5py
 import vitaldb
 from biosppy.signals import ecg
 from scipy.signal import detrend
@@ -275,140 +274,149 @@ class BaseProcessor:
 class MimicProcessor(BaseProcessor):
     def __init__(self, args: argparse.Namespace):
         super().__init__(args)
-        self.required_sigs = ['II', 'PLETH']
+        self.required_sigs = ['II', 'Pleth']
         self.req_seg_duration = 300
         self.slide_segment_time = 30
-        self.original_fs = 125
         self.nan_limit = 0.2
 
+    # Todo:
     def process_record(self):
         dataset_path = self.raw_data_path
         for subject_title_name in os.listdir(dataset_path):
             subject_title_path = os.path.join(dataset_path, subject_title_name)
             for subject_name in os.listdir(subject_title_path):
                 subject_path = os.path.join(subject_title_path, subject_name)
-                for filename in os.listdir(subject_path):
-                    file_path = os.path.join(subject_path, filename)
+                if os.path.isdir(subject_path):
 
-                    if os.path.isdir(file_path):
-                        record_names = set(os.path.splitext(f)[0] for f in os.listdir(file_path))
-                        for wave_name in record_names:
-                            wave_path = os.path.join(file_path, wave_name)
-                            try:
-                                segment_metadata = wfdb.rdrecord(wave_name, pn_dir=wave_path)
-                            except Exception as e:
-                                print(f"读取记录 {wave_path} 时发生错误: {e}")
-                                continue
+                    for filename in os.listdir(subject_path):
+                        file_path = os.path.join(subject_path, filename)
 
+                        if os.path.isdir(file_path):
+                            hea_files = [f for f in os.listdir(file_path) if f.endswith('.hea')]
 
-                            # Check if the segments include required lead
-                            sigs_leads = segment_metadata.sig_name
-
-                            if len(sigs_leads) < 2:
-                                print("Not enough channels, skip..")
-                                continue
-
-                            if not all(x in sigs_leads for x in self.required_sigs):
-                                print(f'{sigs_leads} is missing signal of II, PLETH')
-                                continue
-
-                            # check if the segments is longer than f{shortest_minutes}
-                            seg_length = segment_metadata.sig_len / (segment_metadata.fs)
-                            if seg_length < self.req_seg_duration:
-                                print(f' (too short at {seg_length / 60:.1f} mins)')
-                                continue
-
-                            print(f"Have the {sigs_leads}..........")
-
-                            # segment every signal into 30s slides
-                            sig_ppg_index = segment_metadata.sig_name.index('PLETH')
-                            sig_ii_index = segment_metadata.sig_name.index('II')
-
-                            sig_ppg = segment_metadata.p_signal[:, sig_ppg_index]
-                            sig_ii = segment_metadata.p_signal[:, sig_ii_index]
-
-                            multi_channel_signal = np.stack((sig_ppg, sig_ii), axis=0)
-
-                            # setting
-                            slide_segment_length = self.slide_segment_time * self.original_fs
-                            slide_segments = []
-                            qua_labels = []
-
-                            # divide into 30 sec, and discard the last slide (<30s)
-                            for i, start in enumerate(range(0, len(sig_ppg) - slide_segment_length + 1, slide_segment_length)):
-                                end = start + slide_segment_length
-                                slide_segment = multi_channel_signal[:, start:end]
-
-                                # check if too much nan value
-                                if self.is_nan_ratio_exceed_any(slide_segment, self.nan_limit, self.original_fs, self.slide_segment_time):
-                                    print(f"too much missing value, nan ratio is {((np.isnan(slide_segment).sum() / 3750) * 100):.2f}%")
-                                    continue
-
-                                # check if the signal is stable
-                                if self.is_any_constant_signal(slide_segment):
-                                    print(f"the sequence is stable, not a signal")
-                                    continue
-
-                                # interpolate
-                                slide_segment = self.interpolate_nan_multichannel(slide_segment)
-                                print("set nan value to zero and normalize signal")
-
-                                lead_ppg_segments = slide_segment[0, :]
-                                lead_ii_segments = slide_segment[1, :]
-
-                                # ECG quality assessment
+                            for hea_file in hea_files:
+                                wave_name = os.path.splitext(hea_file)[0]
+                                wave_path = os.path.join(file_path, wave_name)
                                 try:
-                                    peaks = self.peak_detection(lead_ii_segments, self.original_fs)
-                                    print("find peaks")
-                                except ValueError as e:
-                                    print(f"Warning: {e}, skipping this segment.")
+                                    segment_metadata = wfdb.rdrecord(wave_path)
+                                except Exception as e:
+                                    print(f"读取记录 {wave_path} 时发生错误: {e}")
                                     continue
 
-                                _, _, qua_ii = self.rrSQI(lead_ii_segments, peaks, self.original_fs)
+                                original_fs = int(segment_metadata.fs)
+                                print(original_fs)
+                                # Check if the segments include required lead
+                                sigs_leads = segment_metadata.sig_name
 
-                                # PPG quality assessment
-                                qua_ppg = self.ppg_SQI(lead_ppg_segments, self.original_fs)
-                                qua_ppg = self.scale_ppg_score(qua_ppg)
+                                if len(sigs_leads) < 2:
+                                    print("Not enough channels, skip..")
+                                    continue
 
-                                qua = (qua_ii + qua_ppg) / 2
+                                if not all(x in sigs_leads for x in self.required_sigs):
+                                    print(f'{sigs_leads} is missing signal of II, PLETH')
+                                    continue
 
-                                if qua >= 0.9:
-                                    label = "Excellent"
-                                elif 0.9 < qua <= 0.7:
-                                    label = "Good"
-                                elif 0.7 < qua <= 0.5:
-                                    label = "Acceptable"
-                                elif 0.5 < qua <= 0.3:
-                                    label = "Poor"
-                                else:
-                                    label = "Bad"
+                                # check if the segments is longer than f{shortest_minutes}
+                                seg_length = segment_metadata.sig_len / original_fs
+                                if seg_length < self.req_seg_duration:
+                                    print(f' (too short at {seg_length / 60:.1f} mins)')
+                                    continue
 
-                                # Todo: give classification to qua
-                                qua_labels.append(label)
-                                print(f"The quality in {wave_name}.npy_{i} is: {qua}")
+                                print(f"Have the {sigs_leads}..........")
 
-                                # downsample to 40Hz
-                                # slide_segment = downsample(slide_segment, original_fs, target_fs)
+                                # segment every signal into 30s slides
+                                sig_ppg_index = segment_metadata.sig_name.index('Pleth')
+                                sig_ii_index = segment_metadata.sig_name.index('II')
 
-                                slide_segment = self.normalize_to_minus_one_to_one(slide_segment)
+                                sig_ppg = segment_metadata.p_signal[:, sig_ppg_index]
+                                sig_ii = segment_metadata.p_signal[:, sig_ii_index]
 
-                                slide_segments.append(slide_segment)
+                                multi_channel_signal = np.stack((sig_ppg, sig_ii), axis=0)
 
-                            # save the segments and qualities list
-                            segment_save_path = self.seg_save_path + '/' + subject_name + '/' + file_path + '/' + wave_name
-                            os.makedirs(os.path.dirname(segment_save_path), exist_ok=True)
+                                # setting
+                                slide_segment_length = self.slide_segment_time * original_fs
+                                slide_segments = []
+                                qua_labels = []
 
-                            quality_save_path = self.qua_save_path + '/' + subject_name + '/' + file_path + '/' + wave_name
-                            os.makedirs(os.path.dirname(quality_save_path), exist_ok=True)
+                                # divide into 30 sec, and discard the last slide (<30s)
+                                for i, start in enumerate(range(0, len(sig_ppg) - slide_segment_length + 1, slide_segment_length)):
+                                    end = start + slide_segment_length
+                                    slide_segment = multi_channel_signal[:, start:end]
 
-                            np.save(segment_save_path, slide_segments)
-                            try:
-                                np.save(quality_save_path, qua_labels)
-                            except ValueError as e:
-                                print(f"Skip wrong dimension of qua_labels in {file_path}/{wave_name}")
-                                continue
+                                    # check if too much nan value
+                                    if self.is_nan_ratio_exceed_any(slide_segment, self.nan_limit, original_fs, self.slide_segment_time):
+                                        print(f"too much missing value, nan ratio is {((np.isnan(slide_segment).sum() / 3750) * 100):.2f}%")
+                                        continue
 
-                            print(f"save segments into: {segment_save_path}.npy and qualities into {quality_save_path}.npy")
+                                    # check if the signal is stable
+                                    if self.is_any_constant_signal(slide_segment):
+                                        print(f"the sequence is stable, not a signal")
+                                        continue
+
+                                    # interpolate
+                                    slide_segment = self.interpolate_nan_multichannel(slide_segment)
+                                    resampled_slide_segment = self.resample_waveform(original_fs, slide_segment)
+                                    print("set nan value to zero and normalize signal")
+
+                                    lead_ppg_segments = resampled_slide_segment[0, :]
+                                    lead_ii_segments = resampled_slide_segment[1, :]
+
+
+                                    # ECG quality assessment
+                                    try:
+                                        peaks = self.peak_detection(lead_ii_segments, self.target_sfreq)
+                                        print("find peaks")
+                                    except ValueError as e:
+                                        print(f"Warning: {e}, skipping this segment.")
+                                        continue
+
+                                    _, _, qua_ii = self.rrSQI(lead_ii_segments, peaks, self.target_sfreq)
+
+                                    # PPG quality assessment
+                                    qua_ppg = self.ppg_SQI(lead_ppg_segments, self.target_sfreq)
+                                    qua_ppg = self.scale_ppg_score(qua_ppg)
+
+                                    qua = (qua_ii + qua_ppg) / 2
+
+                                    if qua >= 0.9:
+                                        label = "Excellent"
+                                    elif 0.9 < qua <= 0.7:
+                                        label = "Good"
+                                    elif 0.7 < qua <= 0.5:
+                                        label = "Acceptable"
+                                    elif 0.5 < qua <= 0.3:
+                                        label = "Poor"
+                                    else:
+                                        label = "Bad"
+
+                                    qua_labels.append(label)
+                                    print(f"The quality in {wave_name}.npy_{i} is: {qua}")
+
+
+                                    resampled_slide_segment = self.normalize_to_minus_one_to_one(resampled_slide_segment)
+
+                                    slide_segments.append(resampled_slide_segment)
+
+                                # save the segments and qualities list
+                                segment_save_path = os.path.join(self.seg_save_path, subject_name, filename,
+                                                                 wave_name)
+                                quality_save_path = os.path.join(self.qua_save_path, subject_name, filename,
+                                                                 wave_name)
+
+                                segment_directory = os.path.dirname(segment_save_path)
+                                quality_directory = os.path.dirname(quality_save_path)
+
+                                os.makedirs(segment_directory, exist_ok=True)
+                                os.makedirs(quality_directory, exist_ok=True)
+
+                                np.save(segment_save_path, slide_segments)
+                                try:
+                                    np.save(quality_save_path, qua_labels)
+                                except ValueError as e:
+                                    print(f"Skip wrong dimension of qua_labels in {file_path}/{wave_name}")
+                                    continue
+
+                                print(f"save segments into: {segment_save_path}.npy and qualities into {quality_save_path}.npy")
 
 
 class VitaldbProcessor(BaseProcessor):
@@ -443,7 +451,7 @@ class VitaldbProcessor(BaseProcessor):
             # divide into 30 sec, and discard the last slide (<30s)
             for i, start in enumerate(range(0, len(ppg) - slide_segment_length + 1, slide_segment_length)):
                 end = start + slide_segment_length
-                slide_segment = multi_channel_signal[:, start:end]
+                slide_segment = np.squeeze(multi_channel_signal[:, start:end])
 
                 # check if too much nan value
                 if self.is_nan_ratio_exceed_any(slide_segment, self.nan_limit, self.original_fs,
