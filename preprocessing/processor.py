@@ -33,10 +33,6 @@ class BaseProcessor:
             "Bad": 4
         }
 
-        print(f"简化处理器初始化: 原始数据路径 '{self.raw_data_path}'")
-        print(f"处理参数: 目标采样率={self.target_sfreq}Hz, 滤波范围=[{self.lowcut}Hz, {self.highcut}Hz], "
-              f"工频干扰={self.powerline_freq}Hz")
-
     def _butter_bandpass_filter(self, data: np.ndarray, fs: int, order: int = 4) -> np.ndarray:
         nyq = 0.5 * fs
         can_lowpass = self.highcut > 0 and self.highcut < nyq
@@ -126,8 +122,8 @@ class BaseProcessor:
         nan_ratios = np.isnan(sig).sum(axis=1) / (fs * segment_time)
         return np.any(nan_ratios > threshold)
 
-    def peak_detection(self, sig, fs):
-        r = ecg.ecg(signal=sig, sampling_rate=fs, show=False)
+    def peak_detection(self, sig, fs, band_freq=45):
+        r = ecg.ecg(signal=sig, sampling_rate=fs, show=False, band_frequency=band_freq)
         return r['rpeaks']
 
     def sample_entropy(self, signal, m, r, scale):
@@ -282,6 +278,7 @@ class BaseProcessor:
         self.qua_ppg_scaled = max(0, min(self.qua_ppg_scaled, 1))
         return self.qua_ppg_scaled
 
+
 class MimicProcessor(BaseProcessor):
     def __init__(self, args: argparse.Namespace):
         super().__init__(args)
@@ -365,22 +362,22 @@ class MimicProcessor(BaseProcessor):
 
                                     # interpolate
                                     slide_segment = self.interpolate_nan_multichannel(slide_segment)
-                                    resampled_slide_segment = self.resample_waveform(original_fs, slide_segment)
+
                                     print("set nan value to zero and normalize signal")
 
-                                    lead_ppg_segments = resampled_slide_segment[0, :]
-                                    lead_ii_segments = resampled_slide_segment[1, :]
+                                    lead_ppg_segments = slide_segment[0, :]
+                                    lead_ii_segments = slide_segment[1, :]
 
 
                                     # ECG quality assessment
                                     try:
-                                        peaks = self.peak_detection(lead_ii_segments, self.target_sfreq)
+                                        peaks = self.peak_detection(lead_ii_segments, original_fs, band_freq=30)
                                         print("find peaks")
                                     except ValueError as e:
                                         print(f"Warning: {e}, skipping this segment.")
                                         continue
 
-                                    _, _, qua_ii = self.rrSQI(lead_ii_segments, peaks, self.target_sfreq)
+                                    _, _, qua_ii = self.rrSQI(lead_ii_segments, peaks, original_fs)
 
                                     # PPG quality assessment
                                     qua_ppg = self.ppg_SQI(lead_ppg_segments, self.target_sfreq)
@@ -402,7 +399,7 @@ class MimicProcessor(BaseProcessor):
                                     qua_labels.append(label)
                                     print(f"The quality in {wave_name}.npy_{i} is: {qua}")
 
-
+                                    resampled_slide_segment = self.resample_waveform(original_fs, slide_segment)
                                     resampled_slide_segment = self.normalize_to_minus_one_to_one(resampled_slide_segment)
 
                                     slide_segments.append(resampled_slide_segment)
@@ -432,21 +429,21 @@ class MimicProcessor(BaseProcessor):
         return quality_rank[q1] < quality_rank[q2]
 
     def get_data_pair(self):
-        for ecg_subject_title in os.listdir(self.ecg_segments_path):
+        for ecg_subject_title in tqdm(os.listdir(self.ecg_segments_path)):  # p19994379
             ecg_subject_title_path = os.path.join(self.ecg_segments_path, ecg_subject_title)
-            for ecg_subject_name in os.listdir(ecg_subject_title_path):
+            for ecg_subject_name in os.listdir(ecg_subject_title_path):  # 87407093
                 ecg_subject_path = os.path.join(ecg_subject_title_path, ecg_subject_name)
 
                 # display process bar
-                ecg_segments_list = os.listdir(ecg_subject_path)
-                for ecg_segments_name in tqdm(ecg_segments_list, desc=f"Processing {ecg_subject_name}"):
+                for ecg_segments_name in os.listdir(ecg_subject_path):  # 87407093.npy
 
                     # read segments.npy
                     ecg_slide_segments_path = os.path.join(ecg_subject_path, ecg_segments_name)
                     segments = np.load(ecg_slide_segments_path)
 
                     # read corresponding quality label
-                    quality_path = os.path.join(self.qualities_path, ecg_subject_title, ecg_subject_name, ecg_segments_name)
+                    quality_path = os.path.join(self.qualities_path, ecg_subject_title, ecg_subject_name,
+                                                ecg_segments_name)
                     qualities = np.load(quality_path)
 
                     # Find surrounding 5min segments
@@ -455,13 +452,11 @@ class MimicProcessor(BaseProcessor):
                         for j in range(i + 1, min(i + 10, n)):
                             # if two samples qualities are the same, skip this pair
                             if qualities[i] == qualities[j]:
+                                print("The quality scales are the same")
                                 continue
 
                             if segments[i].size == 0 or segments[j].size == 0:
                                 print("There is no value, skip....")
-                                continue
-
-                            if qualities[i] == 0 or qualities[j] == 0:
                                 continue
 
                             # # save pairs in dict value, and key is according to diff
@@ -477,6 +472,8 @@ class MimicProcessor(BaseProcessor):
                             file_name = f"{ecg_segments_name}_pair_{i}_{j}.npy"
                             file_path = os.path.join(self.pairs_save_path, file_name)
                             np.save(file_path, pair)
+
+
 
 
 class VitaldbProcessor(BaseProcessor):
