@@ -3,11 +3,11 @@ import numpy as np
 import pandas as pd
 import wfdb
 import argparse
-from scipy.signal import butter, filtfilt, iirnotch, resample
+from scipy.signal import butter, filtfilt, iirnotch, resample, detrend
 import vitaldb
 from biosppy.signals import ecg
-from scipy.signal import detrend
 from scipy import signal, stats
+from tqdm import tqdm
 
 
 class BaseProcessor:
@@ -20,6 +20,18 @@ class BaseProcessor:
         self.lowcut = args.l_freq
         self.highcut = args.h_freq
         self.powerline_freq = getattr(args, 'powerline_freq', 50.0)
+
+        self.ecg_segments_path = args.seg_save_path
+        self.qualities_path = args.qua_save_path
+        self.pairs_save_path = args.pair_save_path
+
+        self.quality_rank = {
+            "Excellent": 0,
+            "Good": 1,
+            "Acceptable": 2,
+            "Poor": 3,
+            "Bad": 4
+        }
 
         print(f"简化处理器初始化: 原始数据路径 '{self.raw_data_path}'")
         print(f"处理参数: 目标采样率={self.target_sfreq}Hz, 滤波范围=[{self.lowcut}Hz, {self.highcut}Hz], "
@@ -266,10 +278,9 @@ class BaseProcessor:
             return 0.0
 
     def scale_ppg_score(self, qua_ppg):
-        qua_ppg_scaled = (qua_ppg - 0.5) / 0.3
-        qua_ppg_scaled = max(0, min(qua_ppg_scaled, 1))
-        return qua_ppg_scaled
-
+        self.qua_ppg_scaled = (qua_ppg - 0.5) / 0.3
+        self.qua_ppg_scaled = max(0, min(self.qua_ppg_scaled, 1))
+        return self.qua_ppg_scaled
 
 class MimicProcessor(BaseProcessor):
     def __init__(self, args: argparse.Namespace):
@@ -279,7 +290,6 @@ class MimicProcessor(BaseProcessor):
         self.slide_segment_time = 30
         self.nan_limit = 0.2
 
-    # Todo:
     def process_record(self):
         dataset_path = self.raw_data_path
         for subject_title_name in os.listdir(dataset_path):
@@ -418,6 +428,56 @@ class MimicProcessor(BaseProcessor):
 
                                 print(f"save segments into: {segment_save_path}.npy and qualities into {quality_save_path}.npy")
 
+    def compare_quality(self, quality_rank, q1, q2):
+        return quality_rank[q1] < quality_rank[q2]
+
+    def get_data_pair(self):
+        for ecg_subject_title in os.listdir(self.ecg_segments_path):
+            ecg_subject_title_path = os.path.join(self.ecg_segments_path, ecg_subject_title)
+            for ecg_subject_name in os.listdir(ecg_subject_title_path):
+                ecg_subject_path = os.path.join(ecg_subject_title_path, ecg_subject_name)
+
+                # display process bar
+                ecg_segments_list = os.listdir(ecg_subject_path)
+                for ecg_segments_name in tqdm(ecg_segments_list, desc=f"Processing {ecg_subject_name}"):
+
+                    # read segments.npy
+                    ecg_slide_segments_path = os.path.join(ecg_subject_path, ecg_segments_name)
+                    segments = np.load(ecg_slide_segments_path)
+
+                    # read corresponding quality label
+                    quality_path = os.path.join(self.qualities_path, ecg_subject_title, ecg_subject_name, ecg_segments_name)
+                    qualities = np.load(quality_path)
+
+                    # Find surrounding 5min segments
+                    n = len(segments)
+                    for i in range(n):
+                        for j in range(i + 1, min(i + 10, n)):
+                            # if two samples qualities are the same, skip this pair
+                            if qualities[i] == qualities[j]:
+                                continue
+
+                            if segments[i].size == 0 or segments[j].size == 0:
+                                print("There is no value, skip....")
+                                continue
+
+                            if qualities[i] == 0 or qualities[j] == 0:
+                                continue
+
+                            # # save pairs in dict value, and key is according to diff
+
+                            # if ith-quality is better than j-th quality, then save [segments[i], segments[j]]
+                            # Reversly, if j-th is better, save [segments[j], segments[i]]
+                            # the first segment is relatively good signal, and second is bad.
+                            if self.compare_quality(self.quality_rank, qualities[i], qualities[j]):
+                                pair = [segments[i], segments[j]]
+                            else:
+                                pair = [segments[j], segments[i]]
+
+                            file_name = f"{ecg_segments_name}_pair_{i}_{j}.npy"
+                            file_path = os.path.join(self.pairs_save_path, file_name)
+                            np.save(file_path, pair)
+
 
 class VitaldbProcessor(BaseProcessor):
     def __init__(self, args: argparse.Namespace):
@@ -521,3 +581,46 @@ class VitaldbProcessor(BaseProcessor):
                 continue
 
             print(f"save segments into: {segment_save_path}.npy and qualities into {quality_save_path}.npy")
+
+    def compare_quality(self, quality_rank, q1, q2):
+        return quality_rank[q1] < quality_rank[q2]
+
+    def get_data_pair(self):
+        # display process bar
+        for ecg_segments_name in tqdm(os.listdir(self.ecg_segments_path)):
+            # read segments.npy
+            ecg_slide_segments_path = os.path.join(self.ecg_segments_path, ecg_segments_name)
+            segments = np.load(ecg_slide_segments_path)
+
+            # read corresponding quality label
+            quality_path = os.path.join(self.qualities_path, ecg_segments_name)
+            qualities = np.load(quality_path)
+
+            # Find surrounding 5min segments
+            n = len(segments)
+            for i in range(n):
+                for j in range(i + 1, min(i + 10, n)):
+                    # if two samples qualities are the same, skip this pair
+                    if qualities[i] == qualities[j]:
+                        continue
+
+                    if segments[i].size == 0 or segments[j].size == 0:
+                        print("There is no value, skip....")
+                        continue
+
+                    if qualities[i] == 0 or qualities[j] == 0:
+                        continue
+
+                    # # save pairs in dict value, and key is according to diff
+
+                    # if ith-quality is better than j-th quality, then save [segments[i], segments[j]]
+                    # Reversly, if j-th is better, save [segments[j], segments[i]]
+                    # the first segment is relatively good signal, and second is bad.
+                    if self.compare_quality(self.quality_rank, qualities[i], qualities[j]):
+                        pair = [segments[i], segments[j]]
+                    else:
+                        pair = [segments[j], segments[i]]
+
+                    file_name = f"{ecg_segments_name}_pair_{i}_{j}.npy"
+                    file_path = os.path.join(self.pairs_save_path, file_name)
+                    np.save(file_path, pair)
