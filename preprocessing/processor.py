@@ -383,7 +383,9 @@ class MimicProcessor(BaseProcessor):
                                     qua_ppg = self.ppg_SQI(lead_ppg_segments, self.target_sfreq)
                                     qua_ppg = self.scale_ppg_score(qua_ppg)
 
-                                    qua = (qua_ii + qua_ppg) / 2
+                                    # qua = (qua_ii + qua_ppg) / 2
+
+                                    qua = qua_ii
 
                                     if qua >= 0.9:
                                         label = "Excellent"
@@ -452,7 +454,7 @@ class MimicProcessor(BaseProcessor):
                         for j in range(i + 1, min(i + 10, n)):
                             # if two samples qualities are the same, skip this pair
                             if qualities[i] == qualities[j]:
-                                print("The quality scales are the same")
+                                # print("The quality scales are the same")
                                 continue
 
                             if segments[i].size == 0 or segments[j].size == 0:
