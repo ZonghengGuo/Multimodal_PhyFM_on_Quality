@@ -432,13 +432,14 @@ class MimicProcessor(BaseProcessor):
         return quality_rank[q1] < quality_rank[q2]
 
     def get_data_pair(self):
-        for ecg_subject_title in tqdm(os.listdir(self.ecg_segments_path)): # p19994379
+        for ecg_subject_title in os.listdir(self.ecg_segments_path):
             ecg_subject_title_path = os.path.join(self.ecg_segments_path, ecg_subject_title)
-            for ecg_subject_name in os.listdir(ecg_subject_title_path): # 87407093
+            for ecg_subject_name in os.listdir(ecg_subject_title_path):
                 ecg_subject_path = os.path.join(ecg_subject_title_path, ecg_subject_name)
 
                 # display process bar
-                for ecg_segments_name in os.listdir(ecg_subject_path): # 87407093.npy
+                ecg_segments_list = os.listdir(ecg_subject_path)
+                for ecg_segments_name in tqdm(ecg_segments_list, desc=f"Processing {ecg_subject_name}"):
 
                     # read segments.npy
                     ecg_slide_segments_path = os.path.join(ecg_subject_path, ecg_segments_name)
