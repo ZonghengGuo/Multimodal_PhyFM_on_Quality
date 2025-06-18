@@ -386,7 +386,7 @@ class MimicProcessor(BaseProcessor):
                                     qua_ppg = self.ppg_SQI(lead_ppg_segments, self.target_sfreq)
                                     qua_ppg = self.scale_ppg_score(qua_ppg)
 
-                                    qua = (qua_ii + qua_ppg) / 2
+                                    qua = qua_ii
 
                                     if qua >= 0.9:
                                         label = "Excellent"

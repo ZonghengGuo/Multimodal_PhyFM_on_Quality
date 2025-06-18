@@ -78,7 +78,7 @@ class SignalTransformerEncoder(nn.Module):
 if __name__ == "__main__":
     # 假设你的输入数据是 (Batch_size, Channels, Sequence_length)
     # 例如：(4, 2, 9000) -> 4个样本，每个样本2个通道，序列长度9000
-    batch_size = 4
+    batch_size = 1
     input_channels = 2
     seq_len = 9000
 
@@ -90,6 +90,10 @@ if __name__ == "__main__":
 
     # 实例化模型
     model = SignalTransformerEncoder(input_channels, seq_len, d_model, nhead, num_encoder_layers, dim_feedforward)
+
+    total_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    params_in_M = total_params / 1_000_000
+    print(f"模型的总参数量: {params_in_M:.2f} M")  # 保留两位小数
 
     # 模拟输入数据
     dummy_input = torch.randn(batch_size, input_channels, seq_len)
