@@ -14,8 +14,28 @@ class PositionalEncoding(nn.Module):
         self.register_buffer('pe', pe)
 
     def forward(self, x):
-        # x shape: (seq_len, batch_size, d_model)
         return x + self.pe[:x.size(0), :]
+
+class TemporalConv(nn.Module):
+    def __init__(self, in_chans, out_chans):
+        super().__init__()
+        self.out_chans = out_chans
+        self.conv1 = nn.Conv1d(in_chans, out_chans//100, kernel_size=201, stride=5, padding=100)
+        self.gelu1 = nn.GELU()
+        self.norm1 = nn.GroupNorm(1, out_chans//100)
+        self.conv2 = nn.Conv1d(out_chans//100, out_chans//10, kernel_size=101, stride=10, padding=50)
+        self.gelu2 = nn.GELU()
+        self.norm2 = nn.GroupNorm(1, out_chans//10)
+        self.conv3 = nn.Conv1d(out_chans//10, out_chans, kernel_size=51, stride=10, padding=25)
+        self.norm3 = nn.GroupNorm(1, out_chans)
+        self.gelu3 = nn.GELU()
+
+    def forward(self, x, **kwargs): # [1, 2, 9000]
+        x = self.gelu1(self.norm1(self.conv1(x))) # [1, 10, 1800]
+        x = self.gelu2(self.norm2(self.conv2(x))) # [1, 100, 180]
+        x = self.gelu3(self.norm3(self.conv3(x))) # [1, 1000, 18]
+        return x
+
 
 class SignalTransformerEncoder(nn.Module):
     def __init__(self, input_channels, seq_len, d_model, nhead, num_encoder_layers, dim_feedforward, dropout=0.1):
@@ -23,77 +43,67 @@ class SignalTransformerEncoder(nn.Module):
 
         self.d_model = d_model
         self.seq_len = seq_len
-
-        # 1. Input Embedding Layer
-        # Each channel is treated as a separate sequence initially
-        # We'll use a Conv1D to project the 9000 length sequence to d_model,
-        # or a Linear layer if we flatten the channels for each time step.
-        # For simplicity, let's assume we want to project each time step's 2 features to d_model
-        # If input is (Batch, Channels, Seq_len) -> (Batch, Seq_len, Channels) for Linear
-        # For a (2, 9000) input, we can view it as 9000 time steps, each with 2 features.
-        self.input_projection = nn.Linear(input_channels, d_model)
-
-
-        # 2. Positional Encoding
+        self.patch_embed = TemporalConv(input_channels, d_model)
         self.pos_encoder = PositionalEncoding(d_model, max_len=seq_len)
-
-        # 3. Transformer Encoder Layer
         encoder_layer = nn.TransformerEncoderLayer(d_model=d_model, nhead=nhead, dim_feedforward=dim_feedforward, dropout=dropout, batch_first=True)
         self.transformer_encoder = nn.TransformerEncoder(encoder_layer, num_layers=num_encoder_layers)
-
-        # 4. Feature Output Layer
-        # You might want to average the sequence output, or take the [CLS] token output
-        # Here, we'll average the output sequence to get a single feature vector per sample
-        self.output_feature_layer = nn.Linear(d_model, d_model) # Or any desired feature dimension
+        self.output_feature_layer = nn.Linear(d_model, d_model)
 
     def forward(self, src):
-        # src shape: (batch_size, input_channels, seq_len)
-        # We need to transform it to (batch_size, seq_len, input_channels) for nn.Linear
-        src = src.permute(0, 2, 1) # (batch_size, seq_len, input_channels)
-
-        # Apply input projection
-        # Input shape for self.input_projection: (batch_size, seq_len, input_channels)
-        # Output shape after projection: (batch_size, seq_len, d_model)
-        src = self.input_projection(src) * math.sqrt(self.d_model)
-
-        # Apply positional encoding
-        # TransformerEncoderLayer expects (batch_size, seq_len, d_model)
+        src = self.patch_embed(src) # [batchsize, , 600]
+        # print(src.shape)
+        src = src.permute(0, 2, 1)
         src = self.pos_encoder(src)
-
-        # Pass through transformer encoder
-        output = self.transformer_encoder(src) # (batch_size, seq_len, d_model)
-
-        # Feature Output Layer
-        # Option 1: Average pooling across the sequence dimension
-        features = torch.mean(output, dim=1) # (batch_size, d_model)
-
-        # Option 2: Using a learnable [CLS] token (requires adding an extra token at input)
-        # For simplicity, we stick to average pooling here.
-
-        features = self.output_feature_layer(features) # (batch_size, output_feature_dimension)
+        output = self.transformer_encoder(src) # [1, 18, 1000]
+        features = self.output_feature_layer(output)
 
         return features
 
+#
+class MultiModalTransformerQuality(nn.Module):
+    def __init__(self, input_channels, d_model, nhead, num_encoder_layers, out_dim):
+        super(MultiModalTransformerQuality, self).__init__()
+        self.encoder = SignalTransformerEncoder(
+            input_channels=input_channels,
+            seq_len=9000,
+            d_model=d_model,
+            nhead=nhead,
+            num_encoder_layers=num_encoder_layers,
+            dim_feedforward=out_dim,
+            dropout=0.1
+        )
+
+    def encode(self, signal_data):
+        signal_features = self.encoder(signal_data)
+        return signal_features
+
+    def decoder(self, features):
+        return
+
+
+    def forward(self, signal_data):
+        signal_features = self.encode(signal_data)
+
+        return signal_features
+
+
 # --- 使用示例 ---
 if __name__ == "__main__":
-    # 假设你的输入数据是 (Batch_size, Channels, Sequence_length)
-    # 例如：(4, 2, 9000) -> 4个样本，每个样本2个通道，序列长度9000
     batch_size = 1
-    input_channels = 2
-    seq_len = 9000
+    input_channels = 18
+    seq_len = 1000
 
-    # 模型参数
-    d_model = 128          # 嵌入维度，Transformer内部的维度
-    nhead = 8              # 多头注意力的头数
-    num_encoder_layers = 3 # Transformer Encoder的层数
-    dim_feedforward = 512  # 前馈网络的维度
+    d_model = 1000
+    nhead = 8
+    num_encoder_layers = 6
+    dim_feedforward = 512
 
     # 实例化模型
-    model = SignalTransformerEncoder(input_channels, seq_len, d_model, nhead, num_encoder_layers, dim_feedforward)
+    model = MultiModalTransformerQuality(input_channels, d_model, nhead, num_encoder_layers, dim_feedforward)
 
     total_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     params_in_M = total_params / 1_000_000
-    print(f"模型的总参数量: {params_in_M:.2f} M")  # 保留两位小数
+    print(f"模型的总参数量: {params_in_M:.2f} M")
 
     # 模拟输入数据
     dummy_input = torch.randn(batch_size, input_channels, seq_len)
@@ -102,7 +112,3 @@ if __name__ == "__main__":
     # 前向传播
     output_features = model(dummy_input)
     print(f"输出特征 shape: {output_features.shape}")
-
-    # 验证模型输出的特征维度
-    assert output_features.shape == (batch_size, d_model)
-    print(f"成功构建并运行 Transformer Encoder，输出特征维度为 {d_model}")

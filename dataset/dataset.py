@@ -1,25 +1,34 @@
 import os
 import numpy as np
 import torch
-import scipy.signal
+
 
 class SiamDataset:
-    def __init__(self, pairs_save_path, augment=True):
-        self.pairs_save_path = pairs_save_path
+    def __init__(self, data_paths, augment=True):
         self.augment = augment
         self.data_list = []
 
-        for file in os.listdir(self.pairs_save_path):
-            npy_path = os.path.join(self.pairs_save_path, file)
-            data = np.load(npy_path, allow_pickle=True)
-            self.data_list.append(data)
+        # 遍历你提供的每一个路径
+        for path in data_paths:
+            print(f"Loading data from '{path}'...")
+            if not os.path.isdir(path):
+                print(f"Warning：path '{path}' does not exist，skipping")
+                continue
 
+            # 遍历该路径下的所有文件
+            for file in os.listdir(path):
+                if file.endswith('.npy'):
+                    npy_path = os.path.join(path, file)
+                    try:
+                        data = np.load(npy_path, allow_pickle=True)
+                        self.data_list.append(data)
+                    except Exception as e:
+                        print(f"Error: Loading {npy_path}: {e}")
 
     def __len__(self):
         return len(self.data_list)
 
     def augment_signal(self, signal):
-        # signal: (C, T)
         if np.random.rand() < 0.5:
             noise = 0.01 * np.random.randn(*signal.shape)
             signal = signal + noise
@@ -42,7 +51,7 @@ class SiamDataset:
 
     def __getitem__(self, idx):
         sample = self.data_list[idx]
-        x1 = sample[0]  # shape: (3, 3750)
+        x1 = sample[0]
         x2 = sample[1]
 
         if self.augment:
@@ -50,12 +59,3 @@ class SiamDataset:
             x2 = self.augment_signal(x2)
 
         return torch.tensor(x1, dtype=torch.float32), torch.tensor(x2, dtype=torch.float32)
-
-
-# Demo
-if __name__ == '__main__':
-    dataset = SiamDataset("pre_train/pre_train_setting.json")
-    print("数据集大小:", len(dataset))
-    x1, x2 = dataset[0]
-    print("x1 shape:", x1.shape)
-    print("x2 shape:", x2.shape)
