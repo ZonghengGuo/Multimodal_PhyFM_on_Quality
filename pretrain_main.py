@@ -3,14 +3,14 @@ from dataset import dataset
 from torch.utils.data import random_split, DataLoader
 import numpy as np
 from tqdm import tqdm
-import utils
+import trainer.utils
 from trainer.model import FourierSpectrumProcessor
 from trainer.losses import EMALoss, calculate_rec_loss
 
 
 def get_args():
     parser = argparse.ArgumentParser(description='Multimodal_PhyFM_on_Quality Pretraining Stage')
-    parser.add_argument('--batch_size', type=int, default=256,
+    parser.add_argument('--batch_size', type=int, default=8,
                         help='Number of samples per batch.')
     parser.add_argument('--backbone', type=str, default="ResNet18",
                         help='The architecture of the feature extractor')
@@ -42,8 +42,8 @@ if __name__ == '__main__':
     args = get_args()
 
     pair_paths = [
-        "/path/to/save1",
-        "/path/to/save2"
+        r"E:\PhyData\mimic-iv\physionet.org\files\mimic4wdb\0.1.0\pair",
+        r"E:\PhyData\VitalDB\physionet.org\files\vitaldb\1.0.0\pair"
     ]
 
     # ======================== set dataset and dataloader =====================
@@ -110,6 +110,7 @@ if __name__ == '__main__':
 
     for epoch in range(0, args.epochs):
         losses_per_epoch = []
+
         pbar = tqdm(enumerate(dataloader))
 
         for batch_idx, (x1, x2) in tqdm(enumerate(dataloader)):
@@ -146,11 +147,12 @@ if __name__ == '__main__':
 
             losses_per_epoch.append(loss.cpu().data.numpy())
 
+
             pbar.set_description(
-                'Train Epoch: {} [{}/{} ({:.0f}%)] Loss: {:.6f}'.format(
+                'Train Epoch: {} [{}/{} ({:.0f}%)] Total Loss: {:.6f} Amp Loss: {:.6f} Pha Loss: {:.6f} EMA loss: {:.6f}'.format(
                     epoch, batch_idx + 1, len(dataloader),
                            100. * batch_idx / len(dataloader),
-                    loss.item()))
+                    loss.item(), loss_amp.item(), loss_pha.item, EMA_loss.item))
 
         print(f"Training loss {np.mean(losses_per_epoch)}")
         losses_list.append(np.mean(losses_per_epoch))

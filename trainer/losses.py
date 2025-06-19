@@ -27,7 +27,7 @@ class EMALoss(nn.Module):
         self.center = self.center * self.center_momentum + batch_center * (1 - self.center_momentum)
 
 
-def calculate_rec_loss(self, rec, target):
+def calculate_rec_loss(rec, target):
     """Calculates the reconstruction loss."""
     rec_loss = F.smooth_l1_loss(rec, target)
     return rec_loss
