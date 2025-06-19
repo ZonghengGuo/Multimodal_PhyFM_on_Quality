@@ -3,9 +3,11 @@ from dataset import dataset
 from torch.utils.data import random_split, DataLoader
 import numpy as np
 from tqdm import tqdm
-import trainer.utils
+from trainer import utils
 from trainer.model import FourierSpectrumProcessor
 from trainer.losses import EMALoss, calculate_rec_loss
+from trainer.model import MultiModalTransformerQuality
+import torch
 
 
 def get_args():
@@ -34,7 +36,7 @@ def get_args():
                         help='Final weight decay value, often used with schedulers.')
     parser.add_argument('--momentum_teacher', type=float, default=0.996,
                         help='Momentum for updating the teacher model in self-supervised learning frameworks (e.g., MoCo, DINO).')
-    parser.add_argument('--out_dim', type=int, default=2048,)
+    parser.add_argument('--out_dim', type=int, default=1000,)
 
     return parser.parse_args()
 
@@ -50,14 +52,13 @@ if __name__ == '__main__':
     dataset = dataset.SiamDataset(pair_paths)
 
     print("Total numbers of pre-training pairs:", len(dataset))
-    print("Using the model of:", args.backbone)
 
-    dataloader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True, num_workers=0)
+    dataloader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True, num_workers=4)
 
     # ================== building teacher and student models =================
     # Initiate Student and Teacher encoder
-    student = args.backbone()
-    teacher = args.backbone()
+    student = MultiModalTransformerQuality(2, args.out_dim, 8, 6, 512)
+    teacher = MultiModalTransformerQuality(2, args.out_dim, 8, 6, 512)
 
     student, teacher = student.cuda(), teacher.cuda()
 
@@ -76,7 +77,7 @@ if __name__ == '__main__':
 
     # =================== build loss, optimizer and schedulers =================
     # self-distillation loss function
-    self_distill_loss = losses.EMALoss(out_dim=args.out_dim).cuda()
+    self_distill_loss = EMALoss(out_dim=args.out_dim).cuda()
 
     # build adam optimizer
     params_groups = utils.get_params_groups(student)
