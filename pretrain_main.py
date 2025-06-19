@@ -1,10 +1,11 @@
 import argparse
 from dataset import dataset
 from torch.utils.data import random_split, DataLoader
-import losses
 import numpy as np
 from tqdm import tqdm
 import utils
+from trainer.model import FourierSpectrumProcessor
+from trainer.losses import EMALoss, calculate_rec_loss
 
 
 def get_args():
@@ -60,6 +61,8 @@ if __name__ == '__main__':
 
     student, teacher = student.cuda(), teacher.cuda()
 
+    spectrum = FourierSpectrumProcessor()
+
     total_params = sum(p.numel() for p in teacher.parameters() if p.requires_grad)
     params_in_M = total_params / 1_000_000
     print(f"Total parameters in the model: {params_in_M:.2f} M")  # 保留两位小数
@@ -73,7 +76,7 @@ if __name__ == '__main__':
 
     # =================== build loss, optimizer and schedulers =================
     # self-distillation loss function
-    self_distill_loss = losses.SimpleDINOLoss(out_dim=args.out_dim).cuda()
+    self_distill_loss = losses.EMALoss(out_dim=args.out_dim).cuda()
 
     # build adam optimizer
     params_groups = utils.get_params_groups(student)
@@ -117,10 +120,18 @@ if __name__ == '__main__':
 
             x1, x2 = x1.to("cuda", dtype=torch.float32), x2.to("cuda", dtype=torch.float32)
 
-            teacher_output = teacher(x1)  # good signal as input of teacher
-            student_output = student(x2)  # bad signal as input of student
+            amp_x1, pha_x1 = spectrum(x1)
+            amp_x2, pha_x2 = spectrum(x2)
 
-            loss = self_distill_loss(student_output, teacher_output)
+            teacher_feature, teacher_amp, teacher_pha = teacher(x1)  # good signal as input of teacher
+            student_feature, student_amp, student_pha = student(x2)  # bad signal as input of student
+
+            loss_amp = calculate_rec_loss(teacher_amp, amp_x2)
+            loss_pha = calculate_rec_loss(teacher_pha, pha_x2)
+
+            EMA_loss = self_distill_loss(student_feature, teacher_feature)
+
+            loss = loss_amp + loss_pha + EMA_loss
 
             # student update
             optimizer.zero_grad()

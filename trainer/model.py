@@ -2,6 +2,44 @@ import torch
 import torch.nn as nn
 import math
 
+class FourierSpectrumProcessor(nn.Module):
+    def __init__(self, target_sequence_length=1000, downsample_method='slice'):
+        super(FourierSpectrumProcessor, self).__init__()
+        self.target_sequence_length = target_sequence_length
+        self.downsample_method = downsample_method
+
+        if self.downsample_method == 'pool':
+            pool_factor = 9000 // self.target_sequence_length
+            if 9000 % self.target_sequence_length != 0:
+                raise ValueError("For the “pool” method, the length of the original sequence must be an integer multiple of the length of the target sequence.")
+            self.pool = nn.MaxPool1d(kernel_size=pool_factor, stride=pool_factor)
+
+    def std_norm(self, x):
+        mean = x.mean(dim=-1, keepdim=True)
+        std = x.std(dim=-1, keepdim=True)
+        normalized_x = (x - mean) / (std + 1e-6)
+        return normalized_x
+
+    def forward(self, x):
+        expected_seq_len = 9000
+        x_fft = torch.fft.fft(x, dim=-1)
+        amplitude = torch.abs(x_fft)
+        phase = torch.angle(x_fft)
+
+        if self.downsample_method == 'slice':
+            amplitude = amplitude[:, :, :self.target_sequence_length]
+            phase = phase[:, :, :self.target_sequence_length]
+        elif self.downsample_method == 'pool':
+            amplitude = self.pool(amplitude)
+            phase = self.pool(phase)
+        else:
+            raise ValueError("Unsupported downsampling method. Please select “slice” or “pool”.")
+
+        normalized_amplitude = self.std_norm(amplitude)
+        normalized_phase = self.std_norm(phase)
+
+        return normalized_amplitude, normalized_phase
+
 class PositionalEncoding(nn.Module):
     def __init__(self, d_model, max_len=5000):
         super(PositionalEncoding, self).__init__()
@@ -73,18 +111,35 @@ class MultiModalTransformerQuality(nn.Module):
             dropout=0.1
         )
 
+        self.decoder = SignalTransformerEncoder(
+            input_channels=18,
+            seq_len=1000,
+            d_model=d_model,
+            nhead=nhead,
+            num_encoder_layers=num_encoder_layers,
+            dim_feedforward=out_dim,
+            dropout=0.1
+        )
+
     def encode(self, signal_data):
         signal_features = self.encoder(signal_data)
         return signal_features
 
-    def decoder(self, features):
-        return
+    def decode(self, signal_data, features):
+        decoder_features = self.decoder(features)
+
+        feat_amp = self.decoder_amp_layer(decoder_features)
+        feat_pha = self.decoder_pha_layer(decoder_features)
+
+        return feat_amp, feat_pha
 
 
     def forward(self, signal_data):
         signal_features = self.encode(signal_data)
+        feat_amp, feat_pha = self.decode(signal_data, signal_features)
+        # amp, pha = self.spectrum(signal_data)
 
-        return signal_features
+        return signal_features, feat_amp, feat_pha
 
 
 # --- 使用示例 ---
