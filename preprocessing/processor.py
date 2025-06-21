@@ -30,7 +30,7 @@ class BaseProcessor:
             "Good": 1,
             "Acceptable": 2,
             "Poor": 3,
-            "Bad": 4
+            "Bad": 4,
         }
 
         print(f"简化处理器初始化: 原始数据路径 '{self.raw_data_path}'")
@@ -97,6 +97,15 @@ class BaseProcessor:
         else:
              resampled_data = np.array([])
         return resampled_data
+
+    def resample_waveform(self, signal: np.ndarray, target_length: int = 9000) -> np.ndarray:
+        upsampled_signal = np.zeros((2, target_length))
+
+        # 遍历每个通道进行升采样
+        for i in range(signal.shape[0]):
+            upsampled_signal[i, :] = resample(signal[i, :], target_length)
+
+        return upsampled_signal
 
     def normalize_to_minus_one_to_one(self, data):
         if data.size == 0 or np.all(data == data[0]):
@@ -365,7 +374,7 @@ class MimicProcessor(BaseProcessor):
 
                                     # interpolate
                                     slide_segment = self.interpolate_nan_multichannel(slide_segment)
-                                    resampled_slide_segment = self.resample_waveform(original_fs, slide_segment)
+                                    resampled_slide_segment = self.resample_waveform(slide_segment, 9000)
                                     print("set nan value to zero and normalize signal")
 
                                     lead_ppg_segments = resampled_slide_segment[0, :]
@@ -386,21 +395,22 @@ class MimicProcessor(BaseProcessor):
                                     qua_ppg = self.ppg_SQI(lead_ppg_segments, self.target_sfreq)
                                     qua_ppg = self.scale_ppg_score(qua_ppg)
 
-                                    qua = qua_ii
+                                    qua = (qua_ii + qua_ppg) / 2
 
                                     if qua >= 0.9:
                                         label = "Excellent"
-                                    elif 0.9 < qua <= 0.7:
+                                    elif 0.7 <= qua < 0.9:
                                         label = "Good"
-                                    elif 0.7 < qua <= 0.5:
+                                    elif 0.5 <= qua < 0.7:
                                         label = "Acceptable"
-                                    elif 0.5 < qua <= 0.3:
+                                    elif 0.3 <= qua < 0.5:
                                         label = "Poor"
                                     else:
                                         label = "Bad"
 
+
                                     qua_labels.append(label)
-                                    print(f"The quality in {wave_name}.npy_{i} is: {qua}")
+                                    print(f"The quality in {filename}.npy_{i} is: {qua} and label is: {label}")
 
 
                                     resampled_slide_segment = self.normalize_to_minus_one_to_one(resampled_slide_segment)
@@ -549,18 +559,17 @@ class VitaldbProcessor(BaseProcessor):
 
                 if qua >= 0.9:
                     label = "Excellent"
-                elif 0.9 < qua <= 0.7:
+                elif 0.7 <= qua < 0.9:
                     label = "Good"
-                elif 0.7 < qua <= 0.5:
+                elif 0.5 <= qua < 0.7:
                     label = "Acceptable"
-                elif 0.5 < qua <= 0.3:
+                elif 0.3 <= qua < 0.5:
                     label = "Poor"
                 else:
                     label = "Bad"
 
-                # Todo: give classification to qua
                 qua_labels.append(label)
-                print(f"The quality in {filename}.npy_{i} is: {qua}")
+                print(f"The quality in {filename}.npy_{i} is: {qua} and label is: {label}")
 
                 slide_segment = self.normalize_to_minus_one_to_one(slide_segment)
 

@@ -121,6 +121,18 @@ class MultiModalTransformerQuality(nn.Module):
             dropout=0.1
         )
 
+        self.decoder_amp_layer = nn.Sequential(
+            nn.Linear(d_model, d_model),
+            nn.Tanh(),
+            nn.Linear(d_model, d_model),
+        )
+        # Predicts phase from decoder output
+        self.decoder_pha_layer = nn.Sequential(
+            nn.Linear(d_model, d_model),
+            nn.Tanh(),
+            nn.Linear(d_model, d_model),
+        )
+
     def encode(self, signal_data):
         signal_features = self.encoder(signal_data)
         return signal_features

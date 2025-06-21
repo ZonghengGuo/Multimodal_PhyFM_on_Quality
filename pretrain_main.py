@@ -153,7 +153,7 @@ if __name__ == '__main__':
                 'Train Epoch: {} [{}/{} ({:.0f}%)] Total Loss: {:.6f} Amp Loss: {:.6f} Pha Loss: {:.6f} EMA loss: {:.6f}'.format(
                     epoch, batch_idx + 1, len(dataloader),
                            100. * batch_idx / len(dataloader),
-                    loss.item(), loss_amp.item(), loss_pha.item, EMA_loss.item))
+                    loss.item(), loss_amp.item(), loss_pha.item(), EMA_loss.item()))
 
         print(f"Training loss {np.mean(losses_per_epoch)}")
         losses_list.append(np.mean(losses_per_epoch))
