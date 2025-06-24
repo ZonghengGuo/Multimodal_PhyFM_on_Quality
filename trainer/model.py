@@ -41,7 +41,7 @@ class FourierSpectrumProcessor(nn.Module):
         return normalized_amplitude, normalized_phase
 
 class PositionalEncoding(nn.Module):
-    def __init__(self, d_model, max_len=5000):
+    def __init__(self, d_model, max_len=9000):
         super(PositionalEncoding, self).__init__()
         pe = torch.zeros(max_len, d_model)
         position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)
@@ -113,7 +113,7 @@ class MultiModalTransformerQuality(nn.Module):
 
         self.decoder = SignalTransformerEncoder(
             input_channels=18,
-            seq_len=1000,
+            seq_len=d_model,
             d_model=d_model,
             nhead=nhead,
             num_encoder_layers=num_encoder_layers,

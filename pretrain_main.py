@@ -12,7 +12,7 @@ import torch
 
 def get_args():
     parser = argparse.ArgumentParser(description='Multimodal_PhyFM_on_Quality Pretraining Stage')
-    parser.add_argument('--batch_size', type=int, default=8,
+    parser.add_argument('--batch_size', type=int, default=256,
                         help='Number of samples per batch.')
     parser.add_argument('--backbone', type=str, default="ResNet18",
                         help='The architecture of the feature extractor')
@@ -36,7 +36,7 @@ def get_args():
                         help='Final weight decay value, often used with schedulers.')
     parser.add_argument('--momentum_teacher', type=float, default=0.996,
                         help='Momentum for updating the teacher model in self-supervised learning frameworks (e.g., MoCo, DINO).')
-    parser.add_argument('--out_dim', type=int, default=1000,)
+    parser.add_argument('--out_dim', type=int, default=500,)
 
     return parser.parse_args()
 
@@ -53,16 +53,16 @@ if __name__ == '__main__':
 
     print("Total numbers of pre-training pairs:", len(dataset))
 
-    dataloader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True, num_workers=4)
+    dataloader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True, num_workers=0)
 
     # ================== building teacher and student models =================
     # Initiate Student and Teacher encoder
-    student = MultiModalTransformerQuality(2, args.out_dim, 8, 6, 512)
-    teacher = MultiModalTransformerQuality(2, args.out_dim, 8, 6, 512)
+    student = MultiModalTransformerQuality(2, args.out_dim, 4, 2, 256)
+    teacher = MultiModalTransformerQuality(2, args.out_dim, 4, 2, 256)
 
     student, teacher = student.cuda(), teacher.cuda()
 
-    spectrum = FourierSpectrumProcessor()
+    spectrum = FourierSpectrumProcessor(target_sequence_length=args.out_dim)
 
     total_params = sum(p.numel() for p in teacher.parameters() if p.requires_grad)
     params_in_M = total_params / 1_000_000
@@ -128,8 +128,8 @@ if __name__ == '__main__':
             teacher_feature, teacher_amp, teacher_pha = teacher(x1)  # good signal as input of teacher
             student_feature, student_amp, student_pha = student(x2)  # bad signal as input of student
 
-            loss_amp = calculate_rec_loss(teacher_amp, amp_x2)
-            loss_pha = calculate_rec_loss(teacher_pha, pha_x2)
+            loss_amp = calculate_rec_loss(student_amp, amp_x1)
+            loss_pha = calculate_rec_loss(student_pha, pha_x1)
 
             EMA_loss = self_distill_loss(student_feature, teacher_feature)
 
