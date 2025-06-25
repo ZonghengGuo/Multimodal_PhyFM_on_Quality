@@ -232,7 +232,7 @@ class BaseProcessor:
             if len(peaks) < 2:
                 return 0.0
 
-            # 2. 灌注指数
+                # 2. 灌注指数
             ac_component = np.max(ppg) - np.min(ppg)
             dc_component = np.mean(ppg)
             perfusion_index = ac_component / dc_component

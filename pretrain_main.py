@@ -1,6 +1,6 @@
 import argparse
 from dataset import dataset
-from torch.utils.data import random_split, DataLoader
+from torch.utils.data import DataLoader
 import numpy as np
 from tqdm import tqdm
 from trainer import utils
@@ -8,6 +8,9 @@ from trainer.model import FourierSpectrumProcessor
 from trainer.losses import EMALoss, calculate_rec_loss
 from trainer.model import MultiModalTransformerQuality
 import torch
+import torch.distributed as dist
+from torch.nn.parallel import DistributedDataParallel as DDP
+from torch.utils.data.distributed import DistributedSampler
 
 
 def get_args():
@@ -37,6 +40,7 @@ def get_args():
     parser.add_argument('--momentum_teacher', type=float, default=0.996,
                         help='Momentum for updating the teacher model in self-supervised learning frameworks (e.g., MoCo, DINO).')
     parser.add_argument('--out_dim', type=int, default=500,)
+    parser.add_argument("--local_rank", type=int, default=-1, help="Local rank for distributed training")
 
     return parser.parse_args()
 
@@ -51,9 +55,30 @@ if __name__ == '__main__':
     # ======================== set dataset and dataloader =====================
     dataset = dataset.SiamDataset(pair_paths)
 
+    if args.local_rank != -1:
+        sampler = DistributedSampler(dataset)
+    else:
+        sampler = None
+
     print("Total numbers of pre-training pairs:", len(dataset))
 
-    dataloader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True, num_workers=0)
+    dataloader = torch.utils.data.DataLoader(
+        dataset,
+        batch_size=args.batch_size,
+        shuffle=(sampler is None), # Shuffle is mutually exclusive with sampler
+        sampler=sampler,
+        num_workers=4,
+        pin_memory=True
+    )
+
+    if args.local_rank != -1:
+        torch.cuda.set_device(args.local_rank)
+        device = torch.device("cuda", args.local_rank)
+        dist.init_process_group(backend="nccl")
+        is_main_process = dist.get_rank() == 0
+    else: # Fallback for single GPU training
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        is_main_process = True
 
     # ================== building teacher and student models =================
     # Initiate Student and Teacher encoder
@@ -74,6 +99,9 @@ if __name__ == '__main__':
     # Frozen teacher, only use backward train student
     for p in teacher.parameters():
         p.requires_grad = False
+
+    if args.local_rank != -1:
+        student = DDP(student, device_ids=[args.local_rank], output_device=args.local_rank)
 
     # =================== build loss, optimizer and schedulers =================
     # self-distillation loss function
@@ -112,13 +140,17 @@ if __name__ == '__main__':
     for epoch in range(0, args.epochs):
         losses_per_epoch = []
 
-        pbar = tqdm(enumerate(dataloader))
+        if args.local_rank != -1:
+            sampler.set_epoch(epoch)
+
+        pbar = tqdm(enumerate(dataloader), disable=not is_main_process)
 
         for batch_idx, (x1, x2) in tqdm(enumerate(dataloader)):
+            global_step = epoch * len(dataloader) + batch_idx
             for i, param_group in enumerate(optimizer.param_groups):
-                param_group["lr"] = lr_schedule[batch_idx]
+                param_group["lr"] = lr_schedule[global_step]
                 if i == 0:  # only the first group is regularized
-                    param_group["weight_decay"] = wd_schedule[batch_idx]
+                    param_group["weight_decay"] = wd_schedule[global_step]
 
             x1, x2 = x1.to("cuda", dtype=torch.float32), x2.to("cuda", dtype=torch.float32)
 
@@ -133,7 +165,7 @@ if __name__ == '__main__':
 
             EMA_loss = self_distill_loss(student_feature, teacher_feature)
 
-            loss = loss_amp + loss_pha + EMA_loss
+            loss = 0.1 * loss_amp + 0.1 * loss_pha + EMA_loss
 
             # student update
             optimizer.zero_grad()
@@ -142,34 +174,44 @@ if __name__ == '__main__':
 
             # EMA update for the teacher
             with torch.no_grad():
-                m = momentum_schedule[batch_idx]  # momentum parameter
-                for param_q, param_k in zip(student.parameters(), teacher.parameters()):
+                m = momentum_schedule[global_step]  # momentum parameter
+                student_params = student.module.parameters() if args.local_rank != -1 else student.parameters()
+                for param_q, param_k in zip(student_params, teacher.parameters()):
                     param_k.data.mul_(m).add_((1 - m) * param_q.detach().data)
 
-            losses_per_epoch.append(loss.cpu().data.numpy())
+            losses_per_epoch.append(loss.item())
 
-
-            pbar.set_description(
-                'Train Epoch: {} [{}/{} ({:.0f}%)] Total Loss: {:.6f} Amp Loss: {:.6f} Pha Loss: {:.6f} EMA loss: {:.6f}'.format(
-                    epoch, batch_idx + 1, len(dataloader),
-                           100. * batch_idx / len(dataloader),
-                    loss.item(), loss_amp.item(), loss_pha.item(), EMA_loss.item()))
+            if is_main_process:
+                pbar.set_description(
+                    'Train Epoch: {} [{}/{} ({:.0f}%)] Total Loss: {:.6f} Amp Loss: {:.6f} Pha Loss: {:.6f} EMA loss: {:.6f}'.format(
+                        epoch, batch_idx + 1, len(dataloader),
+                               100. * batch_idx / len(dataloader),
+                        loss.item(), loss_amp.item(), loss_pha.item(), EMA_loss.item()))
 
         print(f"Training loss {np.mean(losses_per_epoch)}")
-        losses_list.append(np.mean(losses_per_epoch))
+        epoch_loss = torch.tensor(np.mean(losses_per_epoch)).to(device)
+        if args.local_rank != -1:
+            dist.all_reduce(epoch_loss, op=dist.ReduceOp.AVG)
 
-        # 保存模型
-        if losses_list[-1] < best_loss:
-            print("Model is going to save")
-            print(f"last loss: {losses_list[-1]} | best loss: {best_loss}")
-            best_loss = losses_list[-1]
-            epochs_no_improve = 0
+        avg_epoch_loss = epoch_loss.item()
+        losses_list.append(avg_epoch_loss)
 
-            # save teacher model
-            torch.save(
-                {'model_state_dict': teacher.state_dict()},
-                f'{args.model_save_path}/{args.backbone}_teacher.pth'
-            )
+        if is_main_process:
+            print(f"Training loss {avg_epoch_loss}")
+
+            if losses_list[-1] < best_loss:
+                print("Model is going to save")
+                print(f"last loss: {losses_list[-1]} | best loss: {best_loss}")
+                best_loss = losses_list[-1]
+                epochs_no_improve = 0
+
+                # <--- MODIFICATION: Save the underlying model state_dict
+                # This makes it easy to load the model on any device configuration later
+                model_to_save = student.module if args.local_rank != -1 else student
+                torch.save(
+                    {'model_state_dict': teacher.state_dict()},
+                    f'{args.model_save_path}/{args.backbone}_teacher.pth'
+                )
 
             # torch.save(
             #     {'model_state_dict': student.state_dict()},
@@ -183,6 +225,9 @@ if __name__ == '__main__':
         if epochs_no_improve >= patience:
             print("Early stopping triggered")
             break
+
+    if args.local_rank != -1:
+        dist.destroy_process_group()
 
     utils.plot_losses(losses_list, save_path='train_val_loss_curve.png')
 
