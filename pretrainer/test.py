@@ -114,7 +114,6 @@ if __name__ == "__main__":
     print(f"\n使用 'pool' 方法：")
     print(f"标准化幅度谱形状: {normalized_amp_pool.shape}")
     print(f"标准化相位谱形状: {normalized_phase_pool.shape}")
-
     # 尝试错误形状的输入
     try:
         wrong_input = torch.randn(2, 1, 1000)

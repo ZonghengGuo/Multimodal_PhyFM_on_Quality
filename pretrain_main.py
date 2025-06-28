@@ -2,12 +2,13 @@ import argparse
 from dataset import dataset
 import numpy as np
 from tqdm import tqdm
-from trainer import utils
+from pretrainer import utils
 from models.Transformer import FourierSpectrumProcessor
-from trainer.losses import EMALoss, calculate_rec_loss
+from pretrainer.losses import EMALoss, calculate_rec_loss
 from models.Transformer import MultiModalTransformerQuality
 from models.ResNet import MultiModalResNetQuality
 from models.Mamba import MultiModalMambaQuality
+from models.PWSA import MultiModalLongformerQuality
 import torch
 import torch.distributed as dist
 from torch.nn.parallel import DistributedDataParallel as DDP
@@ -20,6 +21,8 @@ def get_args():
                         help='Number of samples per batch.')
     parser.add_argument('--backbone', type=str,
                         help='The architecture of the feature extractor')
+    parser.add_argument('--min_lr', type=int, default=8,
+                        help='The window size of physiological windowed sparse attention.')
     parser.add_argument('--pair_data_path', type=str, default="data/mimic/pair_segments",
                         help='Path to the directory containing paired data segments.')
     parser.add_argument('--lr', type=float, default=1e-4,
@@ -40,7 +43,7 @@ def get_args():
                         help='Final weight decay value, often used with schedulers.')
     parser.add_argument('--momentum_teacher', type=float, default=0.996,
                         help='Momentum for updating the teacher model in self-supervised learning frameworks (e.g., MoCo, DINO).')
-    parser.add_argument('--out_dim', type=int, default=500,)
+    parser.add_argument('--out_dim', type=int, default=512,)
     parser.add_argument("--local_rank", type=int, default=-1, help="Local rank for distributed training")
 
     return parser.parse_args()
@@ -49,8 +52,8 @@ if __name__ == '__main__':
     args = get_args()
 
     pair_paths = [
-        r"E:\PhyData\mimic-iv\physionet.org\files\mimic4wdb\0.1.0\pair",
-        r"E:\PhyData\VitalDB\physionet.org\files\vitaldb\1.0.0\pair"
+        r"root\cross\mimic\pair",
+        r"root\cross\vitaldb\pair"
     ]
 
     # ======================== set dataset and dataloader =====================
@@ -83,7 +86,10 @@ if __name__ == '__main__':
 
     # ================== building teacher and student models =================
     # Initiate Student and Teacher encoder
-    if args.backbone == 'transformer':
+    if args.backbone == "pwsa":
+        student = MultiModalLongformerQuality(2, args.out_dim, 4, 2, 256, args.window_size)
+        teacher = MultiModalLongformerQuality(2, args.out_dim, 4, 2, 256, args.window_size)
+    elif args.backbone == 'transformer':
         student = MultiModalTransformerQuality(2, args.out_dim, 4, 2, 256)
         teacher = MultiModalTransformerQuality(2, args.out_dim, 4, 2, 256)
     elif args.backbone == 'resnet':
@@ -94,7 +100,7 @@ if __name__ == '__main__':
         teacher = MultiModalMambaQuality(2, args.out_dim, 2, 256)
     else:
         raise ValueError(
-            f"Unsupported backbone: '{args.backbone}'. Please choose from ['resnet', 'transformer', 'mamba'].")
+            f"Unsupported backbone: '{args.backbone}'. Please choose from ['pwas', 'resnet', 'transformer', 'mamba'].")
 
 
     student, teacher = student.cuda(), teacher.cuda()
@@ -181,8 +187,8 @@ if __name__ == '__main__':
                 loss = 0.1 * loss_amp + 0.1 * loss_pha + EMA_loss
 
             elif args.backbone == 'resnet':
-                teacher_feature, _, _ = teacher(x1)  # good signal as input of teacher
-                student_feature, _, _ = student(x2)  # bad signal as input of student
+                teacher_feature, _, _ = teacher(x1)
+                student_feature, _, _ = student(x2)
 
                 EMA_loss = self_distill_loss(student_feature, teacher_feature)
 

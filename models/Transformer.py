@@ -48,7 +48,7 @@ class PositionalEncoding(nn.Module):
         div_term = torch.exp(torch.arange(0, d_model, 2).float() * (-math.log(10000.0) / d_model))
         pe[:, 0::2] = torch.sin(position * div_term)
         pe[:, 1::2] = torch.cos(position * div_term)
-        pe = pe.unsqueeze(0).transpose(0, 1) # Shape: (max_len, 1, d_model)
+        pe = pe.unsqueeze(0).transpose(0, 1)
         self.register_buffer('pe', pe)
 
     def forward(self, x):
@@ -68,10 +68,10 @@ class TemporalConv(nn.Module):
         self.norm3 = nn.GroupNorm(1, out_chans)
         self.gelu3 = nn.GELU()
 
-    def forward(self, x, **kwargs): # [1, 2, 9000]
-        x = self.gelu1(self.norm1(self.conv1(x))) # [1, 10, 1800]
-        x = self.gelu2(self.norm2(self.conv2(x))) # [1, 100, 180]
-        x = self.gelu3(self.norm3(self.conv3(x))) # [1, 1000, 18]
+    def forward(self, x, **kwargs):
+        x = self.gelu1(self.norm1(self.conv1(x)))
+        x = self.gelu2(self.norm2(self.conv2(x)))
+        x = self.gelu3(self.norm3(self.conv3(x)))
         return x
 
 
@@ -150,7 +150,6 @@ class MultiModalTransformerQuality(nn.Module):
     def forward(self, signal_data):
         signal_features = self.encode(signal_data)
         feat_amp, feat_pha = self.decode(signal_features)
-        # amp, pha = self.spectrum(signal_data)
 
         return signal_features, feat_amp, feat_pha
 
@@ -161,12 +160,11 @@ if __name__ == "__main__":
     input_channels = 2
     seq_len = 9000
 
-    d_model = 500
+    d_model = 512
     nhead = 4
     num_encoder_layers = 2
     dim_feedforward = 256
 
-    # 实例化模型
     model = MultiModalTransformerQuality(input_channels, d_model, nhead, num_encoder_layers, dim_feedforward)
 
     total_params = sum(p.numel() for p in model.parameters() if p.requires_grad)

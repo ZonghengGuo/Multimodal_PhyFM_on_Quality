@@ -211,25 +211,22 @@ if __name__ == "__main__":
     input_channels = 2
     seq_len = 9000
 
-    d_model = 500
+    d_model = 512
 
     num_mamba_layers = 2
     out_dim = 256
 
     model = MultiModalMambaQuality(input_channels, d_model, num_mamba_layers, out_dim)
 
-    if isinstance(model.encoder.mamba_layers[0], nn.Identity):
-        print("请先安装 Mamba: pip install mamba-ssm causal-conv1d")
-    else:
-        total_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
-        params_in_M = total_params / 1_000_000
-        print(f"模型的总参数量: {params_in_M:.2f} M")
+    total_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    params_in_M = total_params / 1_000_000
+    print(f"模型的总参数量: {params_in_M:.2f} M")
 
-        dummy_input = torch.randn(batch_size, input_channels, seq_len)
-        print(f"输入数据 shape: {dummy_input.shape}")
+    dummy_input = torch.randn(batch_size, input_channels, seq_len)
+    print(f"输入数据 shape: {dummy_input.shape}")
 
-        # 前向传播
-        output_features, feat_amp, feat_pha = model(dummy_input)
-        print(f"输出特征 shape: {output_features.shape}")
-        print(f"amp shape: {feat_amp.shape}")
-        print(f"pha shape: {feat_pha.shape}")
+    # 前向传播
+    output_features, feat_amp, feat_pha = model(dummy_input)
+    print(f"输出特征 shape: {output_features.shape}")
+    print(f"amp shape: {feat_amp.shape}")
+    print(f"pha shape: {feat_pha.shape}")
