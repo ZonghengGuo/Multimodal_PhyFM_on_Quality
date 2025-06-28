@@ -126,7 +126,8 @@ class MultiModalTransformerQuality(nn.Module):
             nn.Tanh(),
             nn.Linear(d_model, d_model),
         )
-        # Predicts phase from decoder output
+
+
         self.decoder_pha_layer = nn.Sequential(
             nn.Linear(d_model, d_model),
             nn.Tanh(),
@@ -137,7 +138,7 @@ class MultiModalTransformerQuality(nn.Module):
         signal_features = self.encoder(signal_data)
         return signal_features
 
-    def decode(self, signal_data, features):
+    def decode(self, features):
         decoder_features = self.decoder(features)
 
         feat_amp = self.decoder_amp_layer(decoder_features)
@@ -148,7 +149,7 @@ class MultiModalTransformerQuality(nn.Module):
 
     def forward(self, signal_data):
         signal_features = self.encode(signal_data)
-        feat_amp, feat_pha = self.decode(signal_data, signal_features)
+        feat_amp, feat_pha = self.decode(signal_features)
         # amp, pha = self.spectrum(signal_data)
 
         return signal_features, feat_amp, feat_pha
@@ -156,14 +157,14 @@ class MultiModalTransformerQuality(nn.Module):
 
 # --- 使用示例 ---
 if __name__ == "__main__":
-    batch_size = 1
-    input_channels = 18
-    seq_len = 1000
+    batch_size = 2
+    input_channels = 2
+    seq_len = 9000
 
-    d_model = 1000
-    nhead = 8
-    num_encoder_layers = 6
-    dim_feedforward = 512
+    d_model = 500
+    nhead = 4
+    num_encoder_layers = 2
+    dim_feedforward = 256
 
     # 实例化模型
     model = MultiModalTransformerQuality(input_channels, d_model, nhead, num_encoder_layers, dim_feedforward)
@@ -177,5 +178,7 @@ if __name__ == "__main__":
     print(f"输入数据 shape: {dummy_input.shape}")
 
     # 前向传播
-    output_features = model(dummy_input)
-    print(f"输出特征 shape: {output_features.shape}")
+    output_features, feat_amp, feat_pha = model(dummy_input)
+    print(f"输出特征 shape: {output_features.shape}") # [2, 18, 1000]
+    print(f"amp shape: {feat_amp.shape}") # [2, 2, 1000]
+    print(f"pha shape: {feat_pha.shape}") # [2, 2, 1000]

@@ -1,12 +1,13 @@
 import argparse
 from dataset import dataset
-from torch.utils.data import DataLoader
 import numpy as np
 from tqdm import tqdm
 from trainer import utils
-from trainer.model import FourierSpectrumProcessor
+from models.Transformer import FourierSpectrumProcessor
 from trainer.losses import EMALoss, calculate_rec_loss
-from trainer.model import MultiModalTransformerQuality
+from models.Transformer import MultiModalTransformerQuality
+from models.ResNet import MultiModalResNetQuality
+from models.Mamba import MultiModalMambaQuality
 import torch
 import torch.distributed as dist
 from torch.nn.parallel import DistributedDataParallel as DDP
@@ -17,7 +18,7 @@ def get_args():
     parser = argparse.ArgumentParser(description='Multimodal_PhyFM_on_Quality Pretraining Stage')
     parser.add_argument('--batch_size', type=int, default=256,
                         help='Number of samples per batch.')
-    parser.add_argument('--backbone', type=str, default="ResNet18",
+    parser.add_argument('--backbone', type=str,
                         help='The architecture of the feature extractor')
     parser.add_argument('--pair_data_path', type=str, default="data/mimic/pair_segments",
                         help='Path to the directory containing paired data segments.')
@@ -82,8 +83,19 @@ if __name__ == '__main__':
 
     # ================== building teacher and student models =================
     # Initiate Student and Teacher encoder
-    student = MultiModalTransformerQuality(2, args.out_dim, 4, 2, 256)
-    teacher = MultiModalTransformerQuality(2, args.out_dim, 4, 2, 256)
+    if args.backbone == 'transformer':
+        student = MultiModalTransformerQuality(2, args.out_dim, 4, 2, 256)
+        teacher = MultiModalTransformerQuality(2, args.out_dim, 4, 2, 256)
+    elif args.backbone == 'resnet':
+        student = MultiModalResNetQuality(2, args.out_dim, 18)
+        teacher = MultiModalResNetQuality(2, args.out_dim, 18)
+    elif args.backbone == 'mamba':
+        student = MultiModalMambaQuality(2, args.out_dim, 2, 256)
+        teacher = MultiModalMambaQuality(2, args.out_dim, 2, 256)
+    else:
+        raise ValueError(
+            f"Unsupported backbone: '{args.backbone}'. Please choose from ['resnet', 'transformer', 'mamba'].")
+
 
     student, teacher = student.cuda(), teacher.cuda()
 
@@ -154,18 +166,27 @@ if __name__ == '__main__':
 
             x1, x2 = x1.to("cuda", dtype=torch.float32), x2.to("cuda", dtype=torch.float32)
 
-            amp_x1, pha_x1 = spectrum(x1)
-            amp_x2, pha_x2 = spectrum(x2)
+            if args.backbone == 'transformer' or args.backbone == 'mamba':
+                amp_x1, pha_x1 = spectrum(x1)
+                amp_x2, pha_x2 = spectrum(x2)
 
-            teacher_feature, teacher_amp, teacher_pha = teacher(x1)  # good signal as input of teacher
-            student_feature, student_amp, student_pha = student(x2)  # bad signal as input of student
+                teacher_feature, teacher_amp, teacher_pha = teacher(x1)  # good signal as input of teacher
+                student_feature, student_amp, student_pha = student(x2)  # bad signal as input of student
 
-            loss_amp = calculate_rec_loss(student_amp, amp_x1)
-            loss_pha = calculate_rec_loss(student_pha, pha_x1)
+                loss_amp = calculate_rec_loss(student_amp, amp_x1)
+                loss_pha = calculate_rec_loss(student_pha, pha_x1)
 
-            EMA_loss = self_distill_loss(student_feature, teacher_feature)
+                EMA_loss = self_distill_loss(student_feature, teacher_feature)
 
-            loss = 0.1 * loss_amp + 0.1 * loss_pha + EMA_loss
+                loss = 0.1 * loss_amp + 0.1 * loss_pha + EMA_loss
+
+            elif args.backbone == 'resnet':
+                teacher_feature, _, _ = teacher(x1)  # good signal as input of teacher
+                student_feature, _, _ = student(x2)  # bad signal as input of student
+
+                EMA_loss = self_distill_loss(student_feature, teacher_feature)
+
+                loss = EMA_loss
 
             # student update
             optimizer.zero_grad()

@@ -76,7 +76,6 @@ class TemporalConv(nn.Module):
         x = self.gelu3(self.norm3(self.conv3(x))) # [1, 1000, 18]
         return x
 
-
 class LongformerEncoderLayer(nn.Module):
     def __init__(self, config: LongformerConfig, layer_id: int):
         super().__init__()
@@ -96,9 +95,6 @@ class LongformerEncoderLayer(nn.Module):
         head_mask: torch.Tensor = None,
         output_attentions: bool = False,
     ):
-        # 自注意力层
-        # LongformerSelfAttention 期望 hidden_states 为 (batch_size, seq_len, embed_dim)
-        # attention_mask 期望为 (batch_size, 1, 1, seq_len)
         self_attention_outputs = self.attention(
             hidden_states,
             attention_mask=attention_mask,
@@ -108,7 +104,6 @@ class LongformerEncoderLayer(nn.Module):
         attention_output = self_attention_outputs[0]
         outputs = self_attention_outputs[1:]  # 如果 output_attentions=True，这里包含注意力权重
 
-        # 残差连接和层归一化
         attention_output = self.sa_layer_norm(hidden_states + self.dropout(attention_output))
 
         # 前馈网络 (FFN)
@@ -123,9 +118,6 @@ class LongformerEncoderLayer(nn.Module):
         return outputs
 
 
-# ====================================================================
-# 修改后的 SignalTransformerEncoder
-# ====================================================================
 class SignalTransformerEncoder(nn.Module):
     def __init__(self, input_channels, seq_len, d_model, nhead, num_encoder_layers, dim_feedforward, dropout=0.1, attention_window=8):
         super(SignalTransformerEncoder, self).__init__()
