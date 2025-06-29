@@ -43,7 +43,7 @@ def get_args():
                         help='Final weight decay value, often used with schedulers.')
     parser.add_argument('--momentum_teacher', type=float, default=0.996,
                         help='Momentum for updating the teacher model in self-supervised learning frameworks (e.g., MoCo, DINO).')
-    parser.add_argument('--out_dim', type=int, default=512,)
+    parser.add_argument('--out_dim', type=int, default=512, help='Output feature dimension.')
     parser.add_argument("--local_rank", type=int, default=-1, help="Local rank for distributed training")
 
     return parser.parse_args()
@@ -172,7 +172,7 @@ if __name__ == '__main__':
 
             x1, x2 = x1.to("cuda", dtype=torch.float32), x2.to("cuda", dtype=torch.float32)
 
-            if args.backbone == 'transformer' or args.backbone == 'mamba':
+            if args.backbone == "pwsa" or args.backbone == 'transformer' or args.backbone == 'mamba':
                 amp_x1, pha_x1 = spectrum(x1)
                 amp_x2, pha_x2 = spectrum(x2)
 
