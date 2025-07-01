@@ -52,8 +52,8 @@ if __name__ == '__main__':
     args = get_args()
 
     pair_paths = [
-        r"root\cross\mimic\pair",
-        r"root\cross\vitaldb\pair"
+        r"root\cross\mimic",
+        r"root\cross\vitaldb"
     ]
 
     # ======================== set dataset and dataloader =====================
