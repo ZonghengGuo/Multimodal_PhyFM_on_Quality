@@ -13,6 +13,7 @@ import torch
 import torch.distributed as dist
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.data.distributed import DistributedSampler
+import os
 
 
 def get_args():
@@ -164,13 +165,17 @@ if __name__ == '__main__':
         pbar = tqdm(enumerate(dataloader), disable=not is_main_process)
 
         for batch_idx, (x1, x2) in tqdm(enumerate(dataloader)):
+            if batch_idx % 50 == 0:  # Print every 50 batches
+                print(
+                    f"[Rank {dist.get_rank()}] on GPU {os.environ['CUDA_VISIBLE_DEVICES'][dist.get_rank() * 2]} is processing batch {batch_idx}",
+                    flush=True)
             global_step = epoch * len(dataloader) + batch_idx
             for i, param_group in enumerate(optimizer.param_groups):
                 param_group["lr"] = lr_schedule[global_step]
                 if i == 0:  # only the first group is regularized
                     param_group["weight_decay"] = wd_schedule[global_step]
 
-            x1, x2 = x1.to("cuda", dtype=torch.float32), x2.to("cuda", dtype=torch.float32)
+            x1, x2 = x1.to(device, dtype=torch.float32), x2.to(device, dtype=torch.float32)
 
             if args.backbone == "pwsa" or args.backbone == 'transformer' or args.backbone == 'mamba':
                 amp_x1, pha_x1 = spectrum(x1)
