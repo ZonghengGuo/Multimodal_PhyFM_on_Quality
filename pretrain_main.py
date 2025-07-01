@@ -103,10 +103,10 @@ if __name__ == '__main__':
         raise ValueError(
             f"Unsupported backbone: '{args.backbone}'. Please choose from ['pwas', 'resnet', 'transformer', 'mamba'].")
 
+    student = student.to(device)
+    teacher = teacher.to(device)
 
-    student, teacher = student.cuda(), teacher.cuda()
-
-    spectrum = FourierSpectrumProcessor(target_sequence_length=args.out_dim)
+    spectrum = FourierSpectrumProcessor(target_sequence_length=args.out_dim).to(device)
 
     total_params = sum(p.numel() for p in teacher.parameters() if p.requires_grad)
     params_in_M = total_params / 1_000_000
@@ -124,7 +124,7 @@ if __name__ == '__main__':
 
     # =================== build loss, optimizer and schedulers =================
     # self-distillation loss function
-    self_distill_loss = EMALoss(out_dim=args.out_dim).cuda()
+    self_distill_loss = EMALoss(out_dim=args.out_dim).to(device)
 
     # build adam optimizer
     params_groups = utils.get_params_groups(student)
