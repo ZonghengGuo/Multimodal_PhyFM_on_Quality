@@ -13,7 +13,6 @@ import torch
 import torch.distributed as dist
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.data.distributed import DistributedSampler
-import os
 
 
 def get_args():
@@ -153,22 +152,20 @@ if __name__ == '__main__':
     losses_list = []
 
     best_loss = float('inf')
+    patience = 20
+    epochs_no_improve = 0
 
     for epoch in range(0, args.epochs):
         losses_per_epoch = []
 
         if args.local_rank != -1:
             sampler.set_epoch(epoch)
-            rank = dist.get_rank()
-        else:
-            rank = 0
 
-        pbar = tqdm(enumerate(dataloader), total=len(dataloader), disable=(rank != 0))
+        pbar = tqdm(enumerate(dataloader),
+                    total=len(dataloader),
+                    disable=not is_main_process)
 
         for batch_idx, (x1, x2) in pbar:
-            torch.cuda.synchronize(device)
-            print(f"[Rank {rank}] Batch {batch_idx}: Starting step.", flush=True)
-
             global_step = epoch * len(dataloader) + batch_idx
             for i, param_group in enumerate(optimizer.param_groups):
                 param_group["lr"] = lr_schedule[global_step]
@@ -199,19 +196,10 @@ if __name__ == '__main__':
 
                 loss = EMA_loss
 
-            print(f"[Rank {rank}] Batch {batch_idx}: Forward pass complete.", flush=True)
-
-            torch.cuda.synchronize(device)
-            print(f"[Rank {rank}] Batch {batch_idx}: Before loss.backward()", flush=True)
-
             # student update
-            loss.backward()
-            torch.cuda.synchronize(device)
-
-            print(f"[Rank {rank}] Batch {batch_idx}: After loss.backward(), before optimizer.step()", flush=True)
-
-            optimizer.step()
             optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
 
             # EMA update for the teacher
             with torch.no_grad():
@@ -257,9 +245,14 @@ if __name__ == '__main__':
                     {'model_state_dict': student.state_dict()},
                     f'{args.model_save_path}/{args.backbone}_student.pth'
                 )
+        else:
+            epochs_no_improve += 1
+            print(f"No improvement for {epochs_no_improve} epochs.")
 
-
-        print(f"[Rank {rank}] Batch {batch_idx}: Step finished.", flush=True)
+        # Early Stopping
+        if epochs_no_improve >= patience:
+            print("Early stopping triggered")
+            break
 
     if args.local_rank != -1:
         dist.destroy_process_group()

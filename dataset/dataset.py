@@ -2,27 +2,44 @@ import os
 import numpy as np
 import torch
 from torch.utils.data import Dataset
+import re
 
 class SiamDataset(Dataset):
-    def __init__(self, data_paths, augment=True):
+    def __init__(self, chunk_dir, augment=True):
         self.augment = augment
-        self.data_list = []
+        self.chunk_dir = chunk_dir
 
-        for path in data_paths:
-            print(f"Scanning path: '{path}'...")
-            if not os.path.isdir(path):
-                print(f"Warning: path '{path}' does not exist, skipping.")
-                continue
+        print(f"Scanning for data chunks in: '{chunk_dir}'...")
+        all_files = os.listdir(self.chunk_dir)
 
-            for file in os.listdir(path):
-                if file.endswith('.npy'):
-                    npy_path = os.path.join(path, file)
-                    self.data_list.append(npy_path)
+        chunk_files = [f for f in all_files if f.startswith('all_paired_data_chunk_') and f.endswith('.npy')]
 
-        print(f"Total .npy files found: {len(self.data_list)}")
+        chunk_files.sort(key=lambda f: int(re.search(r'_(\d+)\.npy$', f).group(1)))
+
+        self.chunk_paths = [os.path.join(self.chunk_dir, f) for f in chunk_files]
+
+        if not self.chunk_paths:
+            raise FileNotFoundError(f"No data chunks found in directory: {self.chunk_dir}")
+
+        self.chunk_lengths = []
+        self.cumulative_lengths = []
+        total_length = 0
+        print("Pre-calculating dataset size...")
+
+        for path in self.chunk_paths:
+            length = len(np.load(path, mmap_mode='r'))
+            self.chunk_lengths.append(length)
+            total_length += length
+            self.cumulative_lengths.append(total_length)
+
+        self._total_length = total_length
+        print(f"Found {len(self.chunk_paths)} chunks with a total of {self._total_length} samples.")
+
+        self.cached_chunk_index = -1
+        self.cached_chunk_data = None
 
     def __len__(self):
-        return len(self.data_list)
+        return self._total_length
 
     def augment_signal(self, signal):
         if np.random.rand() < 0.5:
@@ -46,17 +63,22 @@ class SiamDataset(Dataset):
         return signal
 
     def __getitem__(self, idx):
-        npy_path = self.data_list[idx]
+        chunk_index = np.searchsorted(self.cumulative_lengths, idx, side='right')
 
-        try:
-            data = np.load(npy_path, allow_pickle=True)
-        except Exception as e:
-            print(f"Error: Loading {npy_path}: {e}")
+        if chunk_index != self.cached_chunk_index:
+            self.cached_chunk_data = np.load(self.chunk_paths[chunk_index])
+            self.cached_chunk_index = chunk_index
 
-        x1, x2 = data[0], data[1]
+        if chunk_index == 0:
+            local_index = idx
+        else:
+            local_index = idx - self.cumulative_lengths[chunk_index - 1]
+
+        data_pair = self.cached_chunk_data[local_index]
+        x1, x2 = data_pair[0], data_pair[1]
 
         if self.augment:
-            x1 = self.augment_signal(x1)
-            x2 = self.augment_signal(x2)
+            x1 = self.augment_signal(x1.copy())
+            x2 = self.augment_signal(x2.copy())
 
         return torch.tensor(x1, dtype=torch.float32), torch.tensor(x2, dtype=torch.float32)

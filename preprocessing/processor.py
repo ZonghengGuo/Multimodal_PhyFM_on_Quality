@@ -425,7 +425,23 @@ class MimicProcessor(BaseProcessor):
     def compare_quality(self, quality_rank, q1, q2):
         return quality_rank[q1] < quality_rank[q2]
 
-    def get_data_pair(self):
+    def get_data_pair(self, chunk_size=10000):
+        all_pairs = []
+        chunk_num = 0
+
+        def save_chunk(pairs_list, chunk_index):
+            if not pairs_list:
+                return
+
+            print(f"\nCollected {len(pairs_list)} pairs for chunk {chunk_index}. Converting and saving...")
+            chunk_array = np.array(pairs_list, dtype=np.float32)
+
+            file_name = f"all_paired_data_chunk_{chunk_index}.npy"
+            output_path = os.path.join(self.pairs_save_path, file_name)
+
+            np.save(output_path, chunk_array)
+            print(f"Successfully saved chunk {chunk_index} with shape {chunk_array.shape} to {output_path}")
+
         for ecg_subject_title in os.listdir(self.ecg_segments_path):
             ecg_subject_title_path = os.path.join(self.ecg_segments_path, ecg_subject_title)
             for ecg_subject_name in os.listdir(ecg_subject_title_path):
@@ -468,10 +484,17 @@ class MimicProcessor(BaseProcessor):
                             else:
                                 pair = [segments[j], segments[i]]
 
-                            file_name = f"{ecg_segments_name}_pair_{i}_{j}.npy"
-                            file_path = os.path.join(self.pairs_save_path, file_name)
-                            np.save(file_path, pair)
+                            all_pairs.append(pair)
 
+                            if len(all_pairs) >= chunk_size:
+                                save_chunk(all_pairs, chunk_num)
+                                chunk_num += 1
+                                all_pairs.clear()
+
+        if all_pairs:
+            save_chunk(all_pairs, chunk_num)
+
+        print("\nPreprocessing finished. All chunks have been saved.")
 
 class VitaldbProcessor(BaseProcessor):
     def __init__(self, args: argparse.Namespace):
@@ -578,7 +601,23 @@ class VitaldbProcessor(BaseProcessor):
     def compare_quality(self, quality_rank, q1, q2):
         return quality_rank[q1] < quality_rank[q2]
 
-    def get_data_pair(self):
+    def get_data_pair(self, chunk_size=10000):
+        all_pairs = []
+        chunk_num = 0
+
+        def save_chunk(pairs_list, chunk_index):
+            if not pairs_list:
+                return
+
+            print(f"\nCollected {len(pairs_list)} pairs for chunk {chunk_index}. Converting and saving...")
+            chunk_array = np.array(pairs_list, dtype=np.float32)
+
+            file_name = f"all_paired_data_chunk_{chunk_index}.npy"
+            output_path = os.path.join(self.pairs_save_path, file_name)
+
+            np.save(output_path, chunk_array)
+            print(f"Successfully saved chunk {chunk_index} with shape {chunk_array.shape} to {output_path}")
+
         # display process bar
         for ecg_segments_name in tqdm(os.listdir(self.ecg_segments_path)):
             # read segments.npy
@@ -614,6 +653,14 @@ class VitaldbProcessor(BaseProcessor):
                     else:
                         pair = [segments[j], segments[i]]
 
-                    file_name = f"{ecg_segments_name}_pair_{i}_{j}.npy"
-                    file_path = os.path.join(self.pairs_save_path, file_name)
-                    np.save(file_path, pair)
+                    all_pairs.append(pair)
+
+                    if len(all_pairs) >= chunk_size:
+                        save_chunk(all_pairs, chunk_num)
+                        chunk_num += 1
+                        all_pairs.clear()
+
+        if all_pairs:
+            save_chunk(all_pairs, chunk_num)
+
+        print("\nPreprocessing finished. All chunks have been saved.")
