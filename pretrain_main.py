@@ -110,7 +110,7 @@ if __name__ == '__main__':
 
     total_params = sum(p.numel() for p in teacher.parameters() if p.requires_grad)
     params_in_M = total_params / 1_000_000
-    print(f"Total parameters in the model: {params_in_M:.2f} M")  # 保留两位小数
+    print(f"Total parameters in the model: {params_in_M:.2f} M")
 
     # teacher and student start with the same weights
     teacher.load_state_dict(student.state_dict())
