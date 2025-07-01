@@ -42,7 +42,7 @@ def get_args():
     parser.add_argument('--weight_decay_end', type=float, default=0.4,
                         help='Final weight decay value, often used with schedulers.')
     parser.add_argument('--momentum_teacher', type=float, default=0.996,
-                        help='Momentum for updating the teacher model in self-supervised learning frameworks (e.g., MoCo, DINO).')
+                        help='Momentum for updating the teacher model in self-supervised learning frameworks.')
     parser.add_argument('--out_dim', type=int, default=512, help='Output feature dimension.')
     parser.add_argument("--local_rank", type=int, default=-1, help="Local rank for distributed training")
 
@@ -52,8 +52,8 @@ if __name__ == '__main__':
     args = get_args()
 
     pair_paths = [
-        r"root\cross\mimic",
-        r"root\cross\vitaldb"
+        "/root/cross/mimic",
+        "/root/cross/vitaldb"
     ]
 
     # ======================== set dataset and dataloader =====================
