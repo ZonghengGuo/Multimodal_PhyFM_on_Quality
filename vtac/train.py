@@ -59,13 +59,13 @@ class VtacTrainer:
         positive_class_weight = float(sys.argv[4])
 
         if self.backbone == "pwsa":
-            encoder = MultiModalLongformerQuality(2, self.out_dim, 4, 2, 256, self.window_size)
+            backbone = MultiModalLongformerQuality(2, self.out_dim, 4, 2, 256, self.window_size)
         elif self.backbone == 'transformer':
-            encoder = MultiModalTransformerQuality(2, self.out_dim, 4, 2, 256)
+            backbone = MultiModalTransformerQuality(2, self.out_dim, 4, 2, 256)
         elif self.backbone == 'resnet':
-            encoder = MultiModalResNetQuality(2, self.out_dim, 18)
+            backbone = MultiModalResNetQuality(2, self.out_dim, 18)
         elif self.backbone == 'mamba':
-            encoder = MultiModalMambaQuality(2, self.out_dim, 2, 256)
+            backbone = MultiModalMambaQuality(2, self.out_dim, 2, 256)
         else:
             raise ValueError(
                 f"Unsupported backbone: '{self.backbone}'. Please choose from ['pwas', 'resnet', 'transformer', 'mamba'].")
@@ -118,8 +118,10 @@ class VtacTrainer:
         iterator_test = DataLoader(dataset_eval, **params)
         iterator_heldout = DataLoader(dataset_test, **params)
 
+        # Todo: change it into real path
         checkpoint = torch.load("../../../model_saved/Transformer_teacher.pth")
-        encoder.load_state_dict(checkpoint["model_state_dict"])
+        backbone.load_state_dict(checkpoint["model_state_dict"])
+        encoder = backbone.encoder
 
         print("Load model successfully!!!")
 

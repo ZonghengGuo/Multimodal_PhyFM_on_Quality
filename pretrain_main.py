@@ -21,7 +21,7 @@ def get_args():
                         help='Number of samples per batch.')
     parser.add_argument('--backbone', type=str,
                         help='The architecture of the feature extractor')
-    parser.add_argument('--min_lr', type=int, default=8,
+    parser.add_argument('--window_size', type=int, default=8,
                         help='The window size of physiological windowed sparse attention.')
     parser.add_argument('--pair_data_path', type=str, default="data/mimic/pair_segments",
                         help='Path to the directory containing paired data segments.')
@@ -232,7 +232,6 @@ if __name__ == '__main__':
                 best_loss = losses_list[-1]
                 epochs_no_improve = 0
 
-                # <--- MODIFICATION: Save the underlying model state_dict
                 # This makes it easy to load the model on any device configuration later
                 model_to_save = student.module if args.local_rank != -1 else student
                 torch.save(
@@ -240,10 +239,10 @@ if __name__ == '__main__':
                     f'{args.model_save_path}/{args.backbone}_teacher.pth'
                 )
 
-            # torch.save(
-            #     {'model_state_dict': student.state_dict()},
-            #     f'{model_save_path}/{backbone}_student.pth'
-            # )
+                # torch.save(
+                #     {'model_state_dict': student.state_dict()},
+                #     f'{model_save_path}/{backbone}_student.pth'
+                # )
         else:
             epochs_no_improve += 1
             print(f"No improvement for {epochs_no_improve} epochs.")

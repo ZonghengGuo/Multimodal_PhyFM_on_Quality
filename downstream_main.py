@@ -1,7 +1,7 @@
 import argparse
 from vtac.preprocess import preprocess_vtac
 from vtac.train import VtacTrainer
-
+from AF.preprocess import AFProcessor
 
 
 def get_args():
@@ -21,10 +21,6 @@ def get_args():
     parser.add_argument('--model_save_path', type=str, default="model_saved",
                         help='Path to the directory where trained models will be saved.')
 
-
-
-
-
     return parser.parse_args()
 
 if __name__ == '__main__':
@@ -36,6 +32,14 @@ if __name__ == '__main__':
 
         trainer = VtacTrainer(args)
         trainer.training()
+
+    elif args.dataset_name == "af":
+        processor = AFProcessor(args)
+        processor.process_save()
+
+
+
+
 
 
 

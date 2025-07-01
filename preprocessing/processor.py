@@ -83,25 +83,9 @@ class BaseProcessor:
         tempfilt = filtfilt(N_bp, Wn_bp, tempfilt)
         return tempfilt
 
-    def resample_waveform(self, original_sfreq, signal):
-        num_original_samples = len(signal)
-        num_target_samples = int(num_original_samples * (self.target_sfreq / original_sfreq))
-        if num_target_samples == 0 and num_original_samples > 0:
-            num_target_samples = 1
-
-        if num_original_samples > 0 and num_target_samples > 0:
-             resampled_data = resample(signal, num_target_samples)
-        elif num_original_samples > 0 and num_target_samples == 0:
-             resampled_data = np.array([])
-             print(f"警告: 重采样目标长度为0，原始长度{num_original_samples}。信号变为空。")
-        else:
-             resampled_data = np.array([])
-        return resampled_data
-
     def resample_waveform(self, signal: np.ndarray, target_length: int = 9000) -> np.ndarray:
         upsampled_signal = np.zeros((2, target_length))
 
-        # 遍历每个通道进行升采样
         for i in range(signal.shape[0]):
             upsampled_signal[i, :] = resample(signal[i, :], target_length)
 
