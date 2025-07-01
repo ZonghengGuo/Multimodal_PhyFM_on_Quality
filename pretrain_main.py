@@ -165,10 +165,6 @@ if __name__ == '__main__':
         pbar = tqdm(enumerate(dataloader), disable=not is_main_process)
 
         for batch_idx, (x1, x2) in tqdm(enumerate(dataloader)):
-            if batch_idx % 50 == 0:  # Print every 50 batches
-                print(
-                    f"[Rank {dist.get_rank()}] on GPU {os.environ['CUDA_VISIBLE_DEVICES'][dist.get_rank() * 2]} is processing batch {batch_idx}",
-                    flush=True)
             global_step = epoch * len(dataloader) + batch_idx
             for i, param_group in enumerate(optimizer.param_groups):
                 param_group["lr"] = lr_schedule[global_step]
