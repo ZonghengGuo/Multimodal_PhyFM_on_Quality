@@ -17,7 +17,7 @@ from torch.utils.data.distributed import DistributedSampler
 
 def get_args():
     parser = argparse.ArgumentParser(description='Multimodal_PhyFM_on_Quality Pretraining Stage')
-    parser.add_argument('--batch_size', type=int, default=256,
+    parser.add_argument('--batch_size', type=int, default=1024,
                         help='Number of samples per batch.')
     parser.add_argument('--backbone', type=str,
                         help='The architecture of the feature extractor')
@@ -29,19 +29,19 @@ def get_args():
                         help='Initial learning rate.')
     parser.add_argument('--min_lr', type=float, default=1e-6,
                         help='Minimum learning rate for learning rate schedulers like cosine annealing.')
-    parser.add_argument('--epochs', type=int, default=1000,
+    parser.add_argument('--epochs', type=int, default=1,
                         help='Total number of training epochs.')
     parser.add_argument('--ratio_train_val', type=float, default=0.9,
                         help='Split ratio for training and validation data.')
     parser.add_argument('--model_save_path', type=str, default="model_saved",
                         help='Path to the directory where trained models will be saved.')
-    parser.add_argument('--warmup_epochs', type=int, default=10,
+    parser.add_argument('--warmup_epochs', type=int, default=0,
                         help='Number of warmup epochs for the learning rate scheduler.')
     parser.add_argument('--weight_decay', type=float, default=0.04,
                         help='Initial weight decay value for the optimizer.')
     parser.add_argument('--weight_decay_end', type=float, default=0.4,
                         help='Final weight decay value, often used with schedulers.')
-    parser.add_argument('--momentum_teacher', type=float, default=0.996,
+    parser.add_argument('--momentum_teacher', type=float, default=0.7,
                         help='Momentum for updating the teacher model in self-supervised learning frameworks.')
     parser.add_argument('--out_dim', type=int, default=512, help='Output feature dimension.')
     parser.add_argument("--local_rank", type=int, default=-1, help="Local rank for distributed training")
