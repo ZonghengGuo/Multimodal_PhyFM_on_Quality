@@ -72,7 +72,7 @@ if __name__ == '__main__':
         batch_size=args.batch_size,
         shuffle=(sampler is None), # Shuffle is mutually exclusive with sampler
         sampler=sampler,
-        num_workers=4,
+        num_workers=1,
         pin_memory=True
     )
 
@@ -81,7 +81,7 @@ if __name__ == '__main__':
         device = torch.device("cuda", args.local_rank)
         dist.init_process_group(backend="nccl")
         is_main_process = dist.get_rank() == 0
-    else: # Fallback for single GPU training
+    else:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         is_main_process = True
 
@@ -162,9 +162,11 @@ if __name__ == '__main__':
         if args.local_rank != -1:
             sampler.set_epoch(epoch)
 
-        pbar = tqdm(enumerate(dataloader), disable=not is_main_process)
+        pbar = tqdm(enumerate(dataloader),
+                    total=len(dataloader),
+                    disable=not is_main_process)
 
-        for batch_idx, (x1, x2) in tqdm(enumerate(dataloader)):
+        for batch_idx, (x1, x2) in pbar:
             global_step = epoch * len(dataloader) + batch_idx
             for i, param_group in enumerate(optimizer.param_groups):
                 param_group["lr"] = lr_schedule[global_step]
@@ -240,10 +242,10 @@ if __name__ == '__main__':
                     f'{args.model_save_path}/{args.backbone}_teacher.pth'
                 )
 
-                # torch.save(
-                #     {'model_state_dict': student.state_dict()},
-                #     f'{model_save_path}/{backbone}_student.pth'
-                # )
+                torch.save(
+                    {'model_state_dict': student.state_dict()},
+                    f'{args.model_save_path}/{args.backbone}_student.pth'
+                )
         else:
             epochs_no_improve += 1
             print(f"No improvement for {epochs_no_improve} epochs.")

@@ -50,15 +50,10 @@ class SiamDataset(Dataset):
 
         try:
             data = np.load(npy_path, allow_pickle=True)
-            self.data_list.append(data)
         except Exception as e:
             print(f"Error: Loading {npy_path}: {e}")
 
         x1, x2 = data[0], data[1]
-
-        if x1.shape != (2, 9000) or x2.shape != (2, 9000):
-            print(f"Warning: Skipping {npy_path} due to incorrect shape: {x1.shape}. Expected (2, 9000).")
-            return None
 
         if self.augment:
             x1 = self.augment_signal(x1)
