@@ -17,7 +17,7 @@ from torch.utils.data.distributed import DistributedSampler
 
 def get_args():
     parser = argparse.ArgumentParser(description='Multimodal_PhyFM_on_Quality Pretraining Stage')
-    parser.add_argument('--batch_size', type=int, default=1024,
+    parser.add_argument('--batch_size', type=int, default=256,
                         help='Number of samples per batch.')
     parser.add_argument('--backbone', type=str,
                         help='The architecture of the feature extractor')
@@ -71,7 +71,7 @@ if __name__ == '__main__':
         batch_size=args.batch_size,
         shuffle=(sampler is None),
         sampler=sampler,
-        num_workers=1,
+        num_workers=0,
         pin_memory=True
     )
 
