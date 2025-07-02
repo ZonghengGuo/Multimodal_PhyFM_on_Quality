@@ -52,8 +52,8 @@ if __name__ == '__main__':
     args = get_args()
 
     pair_paths = [
-        "/root/cross/mimic",
-        "/root/cross/vitaldb"
+        "/root/cross/mimic/pair",
+        "/root/cross/vitaldb/pair"
     ]
 
     # ======================== set dataset and dataloader =====================
@@ -69,7 +69,7 @@ if __name__ == '__main__':
     dataloader = torch.utils.data.DataLoader(
         dataset,
         batch_size=args.batch_size,
-        shuffle=(sampler is None), # Shuffle is mutually exclusive with sampler
+        shuffle=(sampler is None),
         sampler=sampler,
         num_workers=1,
         pin_memory=True

@@ -436,6 +436,8 @@ class MimicProcessor(BaseProcessor):
             print(f"\nCollected {len(pairs_list)} pairs for chunk {chunk_index}. Converting and saving...")
             chunk_array = np.array(pairs_list, dtype=np.float32)
 
+            os.makedirs(self.pairs_save_path, exist_ok=True)
+
             file_name = f"all_paired_data_chunk_{chunk_index}.npy"
             output_path = os.path.join(self.pairs_save_path, file_name)
 
@@ -611,6 +613,8 @@ class VitaldbProcessor(BaseProcessor):
 
             print(f"\nCollected {len(pairs_list)} pairs for chunk {chunk_index}. Converting and saving...")
             chunk_array = np.array(pairs_list, dtype=np.float32)
+
+            os.makedirs(self.pairs_save_path, exist_ok=True)
 
             file_name = f"all_paired_data_chunk_{chunk_index}.npy"
             output_path = os.path.join(self.pairs_save_path, file_name)
