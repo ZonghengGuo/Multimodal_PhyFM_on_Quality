@@ -16,9 +16,9 @@ import torch.nn as nn
 
 def get_args():
     parser = argparse.ArgumentParser(description='Multimodal_PhyFM_on_Quality Pretraining Stage with DataParallel')
-    parser.add_argument('--batch_size', type=int, default=1024,
+    parser.add_argument('--batch_size', type=int, default=4096,
                         help='Number of samples per batch.')
-    parser.add_argument('--backbone', type=str, required=True,  # 建议将backbone设为必填项
+    parser.add_argument('--backbone', type=str, required=True,
                         help='The architecture of the feature extractor')
     parser.add_argument('--window_size', type=int, default=8,
                         help='The window size of physiological windowed sparse attention.')
@@ -44,7 +44,7 @@ def get_args():
                         help='Momentum for updating the teacher model in self-supervised learning frameworks.')
     parser.add_argument('--out_dim', type=int, default=512, help='Output feature dimension.')
     # parser.add_argument("--local_rank", type=int, default=-1, help="Local rank for distributed training")
-    parser.add_argument("--num_workers", type=int, default=4, help="Number of workers for data loading.")  # 可以保留并适当调大
+    parser.add_argument("--num_workers", type=int, default=16, help="Number of workers for data loading.")
 
     return parser.parse_args()
 
