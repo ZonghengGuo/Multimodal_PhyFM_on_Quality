@@ -5,21 +5,30 @@ from torch.utils.data import Dataset
 import re
 
 class SiamDataset(Dataset):
-    def __init__(self, chunk_dir, augment=True):
+    def __init__(self, chunk_dirs, augment=True):
         self.augment = augment
-        self.chunk_dir = chunk_dir
+        all_chunk_paths = []
 
-        print(f"Scanning for data chunks in: '{chunk_dir}'...")
-        all_files = os.listdir(self.chunk_dir)
+        print("Scanning for data chunks in provided directories...")
 
-        chunk_files = [f for f in all_files if f.startswith('all_paired_data_chunk_') and f.endswith('.npy')]
+        for chunk_dir in chunk_dirs:
+            print(f"--> Scanning path: '{chunk_dir}'...")
+            if not os.path.isdir(chunk_dir):
+                print(f"Warning: path '{chunk_dir}' does not exist or is not a directory, skipping.")
+                continue
 
-        chunk_files.sort(key=lambda f: int(re.search(r'_(\d+)\.npy$', f).group(1)))
+            all_files = os.listdir(chunk_dir)
+            chunk_files = [f for f in all_files if f.startswith('all_paired_data_chunk_') and f.endswith('.npy')]
+            chunk_files.sort(key=lambda f: int(re.search(r'_(\d+)\.npy$', f).group(1)))
 
-        self.chunk_paths = [os.path.join(self.chunk_dir, f) for f in chunk_files]
+            # Create full paths and add them to our master list.
+            paths_from_this_dir = [os.path.join(chunk_dir, f) for f in chunk_files]
+            all_chunk_paths.extend(paths_from_this_dir)
+
+        self.chunk_paths = all_chunk_paths
 
         if not self.chunk_paths:
-            raise FileNotFoundError(f"No data chunks found in directory: {self.chunk_dir}")
+            raise FileNotFoundError(f"No data chunks found in directory: {chunk_dirs}")
 
         self.chunk_lengths = []
         self.cumulative_lengths = []
