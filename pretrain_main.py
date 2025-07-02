@@ -45,6 +45,7 @@ def get_args():
                         help='Momentum for updating the teacher model in self-supervised learning frameworks.')
     parser.add_argument('--out_dim', type=int, default=512, help='Output feature dimension.')
     parser.add_argument("--local_rank", type=int, default=-1, help="Local rank for distributed training")
+    parser.add_argument("--num_workers", type=int, default=2, help="Number of workers for distributed training.")
 
     return parser.parse_args()
 
@@ -71,7 +72,7 @@ if __name__ == '__main__':
         batch_size=args.batch_size,
         shuffle=(sampler is None),
         sampler=sampler,
-        num_workers=0,
+        num_workers=args.num_workers,
         pin_memory=True
     )
 
