@@ -12,6 +12,7 @@ from models.Mamba import MultiModalMambaQuality
 from models.PWSA import MultiModalLongformerQuality
 import torch
 import torch.nn as nn
+import os
 
 
 def get_args():
@@ -56,6 +57,8 @@ if __name__ == '__main__':
         "/root/cross/mimic/pair",
         "/root/cross/vitaldb/pair"
     ]
+
+    os.makedirs(args.model_save_path, exist_ok=True)
 
     # ======================== set dataset and dataloader =====================
     dataset = dataset.SiamDataset(pair_paths)
@@ -136,8 +139,6 @@ if __name__ == '__main__':
     # ====================== Start Training =========================
     losses_list = []
     best_loss = float('inf')
-    patience = 20
-    epochs_no_improve = 0
 
     for epoch in range(0, args.epochs):
         losses_per_epoch = []
@@ -186,11 +187,18 @@ if __name__ == '__main__':
 
             losses_per_epoch.append(loss.item())
 
-            pbar.set_description(
-                'Train Epoch: {} [{}/{} ({:.0f}%)] Total Loss: {:.6f} Amp Loss: {:.6f} Pha Loss: {:.6f} EMA loss: {:.6f}'.format(
-                    epoch, batch_idx + 1, len(dataloader),
-                           100. * batch_idx / len(dataloader),
-                    loss.item(), loss_amp.item(), loss_pha.item(), EMA_loss.item()))
+            if args.backbone == "pwsa" or args.backbone == 'transformer' or args.backbone == 'mamba':
+                pbar.set_description(
+                    'Train Epoch: {} [{}/{} ({:.0f}%)] Total Loss: {:.6f} Amp Loss: {:.6f} Pha Loss: {:.6f} EMA loss: {:.6f}'.format(
+                        epoch, batch_idx + 1, len(dataloader),
+                               100. * batch_idx / len(dataloader),
+                        loss.item(), loss_amp.item(), loss_pha.item(), EMA_loss.item()))
+            elif args.backbone == 'resnet':
+                pbar.set_description(
+                    'Train Epoch: {} [{}/{} ({:.0f}%)] Total Loss: {:.6f} EMA loss: {:.6f}'.format(
+                        epoch, batch_idx + 1, len(dataloader),
+                               100. * batch_idx / len(dataloader),
+                        loss.item(), EMA_loss.item()))
 
         avg_epoch_loss = np.mean(losses_per_epoch)
         losses_list.append(avg_epoch_loss)
@@ -214,12 +222,3 @@ if __name__ == '__main__':
                 {'model_state_dict': model_to_save.state_dict()},
                 f'{args.model_save_path}/{args.backbone}_student.pth'
             )
-        else:
-            epochs_no_improve += 1
-            print(f"No improvement for {epochs_no_improve} epochs.")
-
-        if epochs_no_improve >= patience:
-            print("Early stopping triggered")
-            break
-
-    utils.plot_losses(losses_list, save_path='train_val_loss_curve.png')

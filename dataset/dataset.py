@@ -75,7 +75,7 @@ class SiamDataset(Dataset):
         chunk_index = np.searchsorted(self.cumulative_lengths, idx, side='right')
 
         if chunk_index != self.cached_chunk_index:
-            self.cached_chunk_data = np.load(self.chunk_paths[chunk_index])
+            self.cached_chunk_data = np.load(self.chunk_paths[chunk_index], mmap_mode='r')
             self.cached_chunk_index = chunk_index
 
         if chunk_index == 0:

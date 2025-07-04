@@ -211,7 +211,7 @@ if __name__ == "__main__":
     input_channels = 2
     seq_len = 9000
 
-    d_model = 512
+    d_model = 400
 
     num_mamba_layers = 2
     out_dim = 256

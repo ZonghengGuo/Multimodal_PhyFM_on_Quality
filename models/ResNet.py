@@ -98,25 +98,20 @@ if __name__ == "__main__":
     batch_size = 4
     input_channels = 2
     seq_len = 9000
-    d_model = 100
+    d_model = 200
 
-    # 我们期望的 encoder 输出形状
     target_channels = 18
     target_seq_len = 500
 
-    # 实例化模型
     model = MultiModalResNetQuality(input_channels, d_model, encoder_output_channels=target_channels)
 
     total_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     params_in_M = total_params / 1_000_000
     print(f"模型的总参数量: {params_in_M:.2f} M")
 
-    # 模拟输入数据
     dummy_input = torch.randn(batch_size, input_channels, seq_len)
     print(f"输入数据 shape: {dummy_input.shape}\n")
 
-    # 前向传播
-    # 使用 torch.no_grad() 进行推理，以节省内存和计算
     with torch.no_grad():
         output_features = model(dummy_input)
 
