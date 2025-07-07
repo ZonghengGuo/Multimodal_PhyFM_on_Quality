@@ -73,7 +73,7 @@ class VtacTrainer:
             "adam_weight_decay": 0.005,
             "batch_size": batch_size,
             "max_epoch": 500,
-            "data_length": 2500,
+            "data_length": 7500,
         }
 
 

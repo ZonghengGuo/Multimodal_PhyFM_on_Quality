@@ -76,7 +76,7 @@ if __name__ == '__main__':
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     # ================== building teacher and student models =================
-    if args.backbone == "pwsa_base":
+    if args.backbone == "pwsa":
         student = MultiModalLongformerQuality(2, args.out_dim, 4, 2, 256, args.window_size)
         teacher = MultiModalLongformerQuality(2, args.out_dim, 4, 2, 256, args.window_size)
     if args.backbone == "pwsa_large":
@@ -158,7 +158,12 @@ if __name__ == '__main__':
 
             x1, x2 = x1.to(device, dtype=torch.float32), x2.to(device, dtype=torch.float32)
 
-            if args.backbone == "pwsa" or args.backbone == 'transformer' or args.backbone == 'mamba':
+            if args.backbone == 'resnet':
+                teacher_feature, _, _ = teacher(x1)
+                student_feature, _, _ = student(x2)
+                EMA_loss = self_distill_loss(student_feature, teacher_feature)
+                loss = EMA_loss
+            else:
                 amp_x1, pha_x1 = spectrum(x1)
                 amp_x2, pha_x2 = spectrum(x2)
                 teacher_feature, teacher_amp, teacher_pha = teacher(x1)
@@ -167,11 +172,7 @@ if __name__ == '__main__':
                 loss_pha = calculate_rec_loss(student_pha, pha_x1)
                 EMA_loss = self_distill_loss(student_feature, teacher_feature)
                 loss = 0.1 * loss_amp + 0.1 * loss_pha + EMA_loss
-            elif args.backbone == 'resnet':
-                teacher_feature, _, _ = teacher(x1)
-                student_feature, _, _ = student(x2)
-                EMA_loss = self_distill_loss(student_feature, teacher_feature)
-                loss = EMA_loss
+
 
             loss = loss.mean()
 
@@ -190,18 +191,19 @@ if __name__ == '__main__':
 
             losses_per_epoch.append(loss.item())
 
-            if args.backbone == "pwsa" or args.backbone == 'transformer' or args.backbone == 'mamba':
-                pbar.set_description(
-                    'Train Epoch: {} [{}/{} ({:.0f}%)] Total Loss: {:.6f} Amp Loss: {:.6f} Pha Loss: {:.6f} EMA loss: {:.6f}'.format(
-                        epoch, batch_idx + 1, len(dataloader),
-                               100. * batch_idx / len(dataloader),
-                        loss.item(), loss_amp.item(), loss_pha.item(), EMA_loss.item()))
-            elif args.backbone == 'resnet':
+            if args.backbone == 'resnet':
                 pbar.set_description(
                     'Train Epoch: {} [{}/{} ({:.0f}%)] Total Loss: {:.6f} EMA loss: {:.6f}'.format(
                         epoch, batch_idx + 1, len(dataloader),
                                100. * batch_idx / len(dataloader),
                         loss.item(), EMA_loss.item()))
+            else:
+                pbar.set_description(
+                    'Train Epoch: {} [{}/{} ({:.0f}%)] Total Loss: {:.6f} Amp Loss: {:.6f} Pha Loss: {:.6f} EMA loss: {:.6f}'.format(
+                        epoch, batch_idx + 1, len(dataloader),
+                               100. * batch_idx / len(dataloader),
+                        loss.item(), loss_amp.item(), loss_pha.item(), EMA_loss.item()))
+
 
         avg_epoch_loss = np.mean(losses_per_epoch)
         losses_list.append(avg_epoch_loss)
