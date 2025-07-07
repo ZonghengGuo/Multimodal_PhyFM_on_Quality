@@ -208,20 +208,17 @@ if __name__ == '__main__':
 
         print(f"Training loss {avg_epoch_loss}")
 
-        if avg_epoch_loss < best_loss:
-            print("Model is going to save")
-            print(f"last loss: {avg_epoch_loss} | best loss: {best_loss}")
-            best_loss = avg_epoch_loss
-            epochs_no_improve = 0
+        print("Model is going to save")
 
-            model_to_save = student.module if isinstance(student, nn.DataParallel) else student
-            teacher_to_save = teacher.module if isinstance(teacher, nn.DataParallel) else teacher
+        model_to_save = student.module if isinstance(student, nn.DataParallel) else student
+        teacher_to_save = teacher.module if isinstance(teacher, nn.DataParallel) else teacher
 
-            torch.save(
-                {'model_state_dict': teacher_to_save.state_dict()},
-                f'{args.model_save_path}/{args.backbone}_teacher.pth'
-            )
-            torch.save(
-                {'model_state_dict': model_to_save.state_dict()},
-                f'{args.model_save_path}/{args.backbone}_student.pth'
-            )
+        torch.save(
+            {'model_state_dict': teacher_to_save.state_dict()},
+            f'{args.model_save_path}/{args.backbone}_teacher_{epoch}.pth'
+        )
+
+        torch.save(
+            {'model_state_dict': model_to_save.state_dict()},
+            f'{args.model_save_path}/{args.backbone}_student_{epoch}.pth'
+        )
