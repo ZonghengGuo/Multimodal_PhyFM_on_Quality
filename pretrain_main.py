@@ -76,9 +76,12 @@ if __name__ == '__main__':
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     # ================== building teacher and student models =================
-    if args.backbone == "pwsa":
+    if args.backbone == "pwsa_base":
         student = MultiModalLongformerQuality(2, args.out_dim, 4, 2, 256, args.window_size)
         teacher = MultiModalLongformerQuality(2, args.out_dim, 4, 2, 256, args.window_size)
+    if args.backbone == "pwsa_large":
+        student = MultiModalLongformerQuality(2, args.out_dim, 4, 10, 512, args.window_size)
+        teacher = MultiModalLongformerQuality(2, args.out_dim, 4, 10, 512, args.window_size)
     elif args.backbone == 'transformer':
         student = MultiModalTransformerQuality(2, args.out_dim, 4, 2, 256)
         teacher = MultiModalTransformerQuality(2, args.out_dim, 4, 2, 256)

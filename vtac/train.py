@@ -1,16 +1,12 @@
-import torch
-import torch.nn as nn
 from torch.utils.data import DataLoader
-from nets import *
-from tools import *
+from vtac.nets import *
+from vtac.tools import *
 from sklearn.model_selection import KFold
 from sklearn.model_selection import train_test_split
 import os
 import random
 import numpy as np
 import sklearn
-import sys
-from nets import FinetuneModel
 from models.Transformer import MultiModalTransformerQuality
 from models.ResNet import MultiModalResNetQuality
 from models.Mamba import MultiModalMambaQuality
@@ -25,10 +21,10 @@ class VtacTrainer:
         self.backbone = args.backbone
         self.out_dim = args.out_dim
         self.window_size = args.min_lr
-
+        self.batch_size = args.batch_size
 
     def training(self):
-        SEED = 1 if len(sys.argv) <= 6 else int(sys.argv[6])
+        SEED = 1
         os.environ["PYTHONHASHSEED"] = str(SEED)
         random.seed(SEED)
         np.random.seed(SEED)
@@ -53,10 +49,10 @@ class VtacTrainer:
         testset_x = zero_nans(testset_x)
         valset_x = zero_nans(valset_x)
 
-        batch_size = int(sys.argv[1])
-        lr = float(sys.argv[2])
-        dropout_probability = float(sys.argv[3])
-        positive_class_weight = float(sys.argv[4])
+        batch_size = self.batch_size
+        lr = 0.0001
+        dropout_probability = 0.1
+        positive_class_weight = 4
 
         if self.backbone == "pwsa":
             backbone = MultiModalLongformerQuality(2, self.out_dim, 4, 2, 256, self.window_size)
@@ -77,7 +73,7 @@ class VtacTrainer:
             "adam_weight_decay": 0.005,
             "batch_size": batch_size,
             "max_epoch": 500,
-            "data_length": 9000,
+            "data_length": 2500,
         }
 
 
@@ -116,14 +112,13 @@ class VtacTrainer:
 
         iterator_train = DataLoader(dataset_train, **params)
         iterator_test = DataLoader(dataset_eval, **params)
-        iterator_heldout = DataLoader(dataset_test, **params)
 
         # Todo: change it into real path
-        checkpoint = torch.load("../../../model_saved/Transformer_teacher.pth")
+        checkpoint = torch.load(f"model_saved/{self.backbone}_teacher.pth")
         backbone.load_state_dict(checkpoint["model_state_dict"])
         encoder = backbone.encoder
 
-        print("Load model successfully!!!")
+        print(f"Load model {self.backbone} successfully!!!")
 
         for param in encoder.parameters():
             param.requires_grad = True

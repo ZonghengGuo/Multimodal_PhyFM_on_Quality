@@ -10,6 +10,7 @@ def get_args():
     # -------------------------------- Downstream Group--------------------------------
     args = parser.add_argument_group('Downstream Tasks.')
     args.add_argument('--dataset_name', type=str, help='dataset name')
+    args.add_argument('--stage', type=str, help='stage name')
     args.add_argument('--raw_data_path', type=str, help='vtac dataset input paths')
     parser.add_argument('--backbone', type=str, help='The architecture of the feature extractor')
     # vtac_args.add_argument('--save_path', type=str, help='vtac dataset save path')
@@ -20,18 +21,20 @@ def get_args():
                         help='The window size of physiological windowed sparse attention.')
     parser.add_argument('--model_save_path', type=str, default="model_saved",
                         help='Path to the directory where trained models will be saved.')
+    parser.add_argument('--batch_size', type=int, default=128, help='Batch size of training.')
 
     return parser.parse_args()
 
 if __name__ == '__main__':
     args = get_args()
     if args.dataset_name == "vtac":
-        processor = preprocess_vtac(args)
-        processor.preprocess_save()
-        processor.splitting()
-
-        trainer = VtacTrainer(args)
-        trainer.training()
+        if args.stage == "preprocessing":
+            processor = preprocess_vtac(args)
+            processor.preprocess_save()
+            processor.splitting()
+        elif args.stage == "training":
+            trainer = VtacTrainer(args)
+            trainer.training()
 
     elif args.dataset_name == "af":
         processor = AFProcessor(args)

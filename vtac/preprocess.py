@@ -16,12 +16,9 @@ class preprocess_vtac:
 
 
     def interpolate_nan_multichannel(self, sig):
-        # sig: shape (channels, time)
-        interpolated = []
-        for channel in sig:
-            interpolated_channel = pd.Series(channel).interpolate(method='linear', limit_direction='both').to_numpy()
-            interpolated.append(interpolated_channel)
-        return np.array(interpolated)
+        df = pd.DataFrame(sig)
+        df.interpolate(method='linear', limit_direction='both', axis=0, inplace=True)
+        return df.to_numpy()
 
 
     def butter_bandpass(self, lowcut, highcut, fs, order=2):
@@ -91,6 +88,8 @@ class preprocess_vtac:
         dataset_path = self.dataset_path
         save_path = dataset_path + "/out/raw"
 
+        os.makedirs(save_path, exist_ok=True)
+
         # get waveform and label
         waveform_path = os.path.join(dataset_path, "waveforms")
         csv_path = os.path.join(dataset_path, "event_labels.csv")
@@ -121,15 +120,12 @@ class preprocess_vtac:
 
                 index_ppg = sig_names.index("PLETH")
                 index_ii = sig_names.index("II")
-                # index_v = sig_names.index("V")
 
                 wave_ppg = sample_record[:, index_ppg]
                 wave_ii = sample_record[:, index_ii]
-                # wave_v = sample_record[:, index_v]
 
                 required_samples.append(self.min_max_norm(self.filter_ppg_channel(wave_ppg)))
                 required_samples.append(self.min_max_norm(self.filter_ecg_channel(wave_ii)))
-                # required_samples.append(filter_ecg_channel(wave_v))
 
                 required_samples = np.array(required_samples)
 
@@ -194,7 +190,7 @@ class preprocess_vtac:
         test_labels = torch.tensor(np.array(test_labels))
 
         # Save the datasets
-        output_dir = "data/out/lead_selected"
+        output_dir = os.path.join(self.dataset_path, "out/lead_selected")
         os.makedirs(output_dir, exist_ok=True)
 
         torch.save((train_samples, train_labels), os.path.join(output_dir, "train.pt"))

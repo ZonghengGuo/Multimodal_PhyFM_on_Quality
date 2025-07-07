@@ -226,10 +226,10 @@ if __name__ == "__main__":
     input_channels = 2
     seq_len = 9000
 
-    d_model = 512
+    d_model = 768
     nhead = 4
-    num_encoder_layers = 2
-    dim_feedforward = 256
+    num_encoder_layers = 10
+    dim_feedforward = 512
     window_size = 8
 
     model = MultiModalLongformerQuality(

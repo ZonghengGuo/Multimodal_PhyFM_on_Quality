@@ -57,7 +57,7 @@ class Dataset_train(Dataset):
 def train_model(batch, model, loss_ce, device, weight):
     signal_train, y_train = batch
     batch_size = len(signal_train)
-    length = 7500
+    length = 2500
     alarm_time = 75000
     # use the last 30s signal as model input
     signal_train = signal_train[:, :, alarm_time - length : alarm_time].float().to(device)
@@ -76,7 +76,7 @@ def eval_model(
     batch, model, loss_ce, device
 ):  # signal_train, alarm_train, y_train, signal_test, alarm_test, y_test = batch
     signal_train, y_train = batch
-    length = 7500
+    length = 2500
     alarm_time = 75000
 
     signal_train = signal_train[:, :, alarm_time - length : alarm_time].float().to(device)
