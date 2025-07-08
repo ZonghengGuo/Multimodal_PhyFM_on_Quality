@@ -159,8 +159,8 @@ if __name__ == '__main__':
             x1, x2 = x1.to(device, dtype=torch.float32), x2.to(device, dtype=torch.float32)
 
             if args.backbone == 'resnet':
-                teacher_feature, _, _ = teacher(x1)
-                student_feature, _, _ = student(x2)
+                teacher_feature = teacher(x1)
+                student_feature = student(x2)
                 EMA_loss = self_distill_loss(student_feature, teacher_feature)
                 loss = EMA_loss
             else:
