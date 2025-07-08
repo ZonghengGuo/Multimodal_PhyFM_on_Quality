@@ -22,6 +22,8 @@ def get_args():
     parser.add_argument('--model_save_path', type=str, default="model_saved",
                         help='Path to the directory where trained models will be saved.')
     parser.add_argument('--batch_size', type=int, default=128, help='Batch size of training.')
+    parser.add_argument('--rsfreq', type=int, default=300, help='resampling rate (Hz)')
+    parser.add_argument('--epochs', type=int, default=100, help='number of epochs')
 
     return parser.parse_args()
 
@@ -37,8 +39,11 @@ if __name__ == '__main__':
             trainer.training()
 
     elif args.dataset_name == "af":
-        processor = AFProcessor(args)
-        processor.process_save()
+        if args.stage == "preprocessing":
+            processor = AFProcessor(args)
+            processor.process_save()
+        elif args.stage == "training":
+            pass
 
 
 

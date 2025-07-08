@@ -8,10 +8,10 @@ from scipy.signal import butter, filtfilt, iirnotch, resample
 
 class AFProcessor:
     def __init__(self, args):
-        self.dataset_path = args.dataset_path
+        self.dataset_path = args.raw_data_path
         self.original_fs = 125
         self.slide_segment_time = 30
-        self.seg_save_path = self.dataset_path + "/out/raw"
+        self.seg_save_path = os.path.join(args.raw_data_path, "segments")
 
     def interpolate_nan_multichannel(self, sig):
         # sig: shape (channels, time)
@@ -90,8 +90,8 @@ class AFProcessor:
         return tempfilt
 
     def process_save(self):
-        for record_name in tqdm(os.listdir(self.dataset_path)):
-            record_path = os.path.join(self.dataset_path, record_name)
+        for class_name in tqdm(os.listdir(self.dataset_path)):
+            record_path = os.path.join(self.dataset_path, class_name)
 
             event_id_set = set()
             for event in os.listdir(record_path):
@@ -128,16 +128,12 @@ class AFProcessor:
 
                     resampled_slide_segment = self.normalize_to_minus_one_to_one(resampled_slide_segment)
 
-                    slide_segments.append(resampled_slide_segment)
+                    segment_save_path = os.path.join(self.seg_save_path, class_name, event_id)
 
-                # save the segments and qualities list
-                segment_save_path = os.path.join(self.seg_save_path, record_name)
+                    segment_directory = os.path.dirname(segment_save_path)
 
-                segment_directory = os.path.dirname(segment_save_path)
+                    os.makedirs(segment_directory, exist_ok=True)
 
-                os.makedirs(segment_directory, exist_ok=True)
+                    np.save(f"{segment_save_path}_{i}", resampled_slide_segment)
 
-                np.save(segment_save_path, slide_segments)
-
-                print(f"save segments into: {segment_save_path}.npy")
-
+                    print(f"save segments into: {segment_save_path}_{i}.npy")
