@@ -4,7 +4,7 @@ import torch
 import random
 
 
-class NpyDataset(Dataset):
+class AfDataset(Dataset):
     def __init__(self, file_paths, labels, augment=False):
         self.file_paths, self.labels, self.augment = file_paths, labels, augment
         self.AUGMENT_PROB = 0.5
