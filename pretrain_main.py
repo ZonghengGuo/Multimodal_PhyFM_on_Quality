@@ -77,8 +77,8 @@ if __name__ == '__main__':
 
     # ================== building teacher and student models =================
     if args.backbone == "pwsa":
-        student = MultiModalLongformerQuality(2, args.out_dim, 4, 2, 256, args.window_size)
-        teacher = MultiModalLongformerQuality(2, args.out_dim, 4, 2, 256, args.window_size)
+        student = MultiModalLongformerQuality(2, 512, 4, 2, 256, args.window_size)
+        teacher = MultiModalLongformerQuality(2, 512, 4, 2, 256, args.window_size)
     elif args.backbone == "pwsa_large":
         student = MultiModalLongformerQuality(2, 768, 4, 10, 512, args.window_size)
         teacher = MultiModalLongformerQuality(2, 768, 4, 10, 512, args.window_size)
@@ -86,14 +86,14 @@ if __name__ == '__main__':
         student = MultiModalLongformerQuality(2, 768, 4, 50, 512, args.window_size)
         teacher = MultiModalLongformerQuality(2, 768, 4, 50, 512, args.window_size)
     elif args.backbone == 'transformer':
-        student = MultiModalTransformerQuality(2, args.out_dim, 4, 2, 256)
-        teacher = MultiModalTransformerQuality(2, args.out_dim, 4, 2, 256)
+        student = MultiModalTransformerQuality(2, 400, 4, 2, 256)
+        teacher = MultiModalTransformerQuality(2, 400, 4, 2, 256)
     elif args.backbone == 'resnet':
-        student = MultiModalResNetQuality(2, args.out_dim, 18)
-        teacher = MultiModalResNetQuality(2, args.out_dim, 18)
+        student = MultiModalResNetQuality(2, 200, 18)
+        teacher = MultiModalResNetQuality(2, 200, 18)
     elif args.backbone == 'mamba':
-        student = MultiModalMambaQuality(2, args.out_dim, 2, 256)
-        teacher = MultiModalMambaQuality(2, args.out_dim, 2, 256)
+        student = MultiModalMambaQuality(2, 400, 2, 256)
+        teacher = MultiModalMambaQuality(2, 400, 2, 256)
     else:
         raise ValueError(
             f"Unsupported backbone: '{args.backbone}'. Please choose from ['pwas', 'resnet', 'transformer', 'mamba'].")
