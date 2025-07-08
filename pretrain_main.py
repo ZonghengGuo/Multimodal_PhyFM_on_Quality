@@ -79,9 +79,12 @@ if __name__ == '__main__':
     if args.backbone == "pwsa":
         student = MultiModalLongformerQuality(2, args.out_dim, 4, 2, 256, args.window_size)
         teacher = MultiModalLongformerQuality(2, args.out_dim, 4, 2, 256, args.window_size)
-    if args.backbone == "pwsa_large":
-        student = MultiModalLongformerQuality(2, args.out_dim, 4, 10, 512, args.window_size)
-        teacher = MultiModalLongformerQuality(2, args.out_dim, 4, 10, 512, args.window_size)
+    elif args.backbone == "pwsa_large":
+        student = MultiModalLongformerQuality(2, 768, 4, 10, 512, args.window_size)
+        teacher = MultiModalLongformerQuality(2, 768, 4, 10, 512, args.window_size)
+    elif args.backbone == "pwsa_huge":
+        student = MultiModalLongformerQuality(2, 768, 4, 50, 512, args.window_size)
+        teacher = MultiModalLongformerQuality(2, 768, 4, 50, 512, args.window_size)
     elif args.backbone == 'transformer':
         student = MultiModalTransformerQuality(2, args.out_dim, 4, 2, 256)
         teacher = MultiModalTransformerQuality(2, args.out_dim, 4, 2, 256)

@@ -228,7 +228,7 @@ if __name__ == "__main__":
 
     d_model = 768
     nhead = 4
-    num_encoder_layers = 10
+    num_encoder_layers = 50
     dim_feedforward = 512
     window_size = 8
 
