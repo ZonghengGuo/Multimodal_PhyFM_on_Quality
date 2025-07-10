@@ -8,7 +8,7 @@ import numpy as np
 from tqdm import tqdm
 
 
-class preprocess_vtac:
+class PreprocessVtac:
     def __init__(self, vtac_args):
         self.SAMPLING_FREQ = vtac_args.sampling_rate
         self.POWERLINE_FREQ = vtac_args.powerline_frequency

@@ -1,5 +1,7 @@
 import torch.distributed as dist
 import numpy as np
+import os
+import re
 
 
 def get_params_groups(model):
@@ -39,3 +41,22 @@ def get_world_size():
     if not is_dist_avail_and_initialized():
         return 1
     return dist.get_world_size()
+
+
+def find_latest_checkpoint(path, prefix, role):
+    pattern = re.compile(rf"{prefix}_{role}_(\d+)\.pth")
+    max_epoch = -1
+    latest_file = None
+
+    for filename in os.listdir(path):
+        match = pattern.match(filename)
+        if match:
+            epoch_num = int(match.group(1))
+            if epoch_num > max_epoch:
+                max_epoch = epoch_num
+                latest_file = filename
+
+    if latest_file is not None:
+        return os.path.join(path, latest_file)
+    else:
+        return None

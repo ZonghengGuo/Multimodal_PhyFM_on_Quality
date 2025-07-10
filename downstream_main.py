@@ -1,8 +1,9 @@
 import argparse
-from vtac.preprocess import preprocess_vtac
+from vtac.preprocess import PreprocessVtac
 from vtac.train import VtacTrainer
 from AF.preprocess import AFProcessor
 from AF.train import AfTrainer
+from BP.preprocess import PreprocessBP
 
 
 def get_args():
@@ -24,7 +25,7 @@ def get_args():
                         help='Path to the directory where trained models will be saved.')
     parser.add_argument('--batch_size', type=int, default=128, help='Batch size of training.')
     parser.add_argument('--rsfreq', type=int, default=300, help='resampling rate (Hz)')
-    parser.add_argument('--epochs', type=int, default=50, help='number of epochs')
+    parser.add_argument('--epochs', type=int, default=20, help='number of epochs')
 
     return parser.parse_args()
 
@@ -32,7 +33,7 @@ if __name__ == '__main__':
     args = get_args()
     if args.dataset_name == "vtac":
         if args.stage == "preprocessing":
-            processor = preprocess_vtac(args)
+            processor = PreprocessVtac(args)
             processor.preprocess_save()
             processor.splitting()
         elif args.stage == "training":
@@ -46,6 +47,11 @@ if __name__ == '__main__':
         elif args.stage == "training":
             trainer = AfTrainer(args)
             trainer.training()
+
+    elif args.dataset_name == "bp":
+        if args.stage == "preprocessing":
+            processor = PreprocessBP(args)
+            processor.process_save()
 
 
 

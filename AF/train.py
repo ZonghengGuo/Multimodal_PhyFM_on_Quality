@@ -1,85 +1,110 @@
 import os
 import glob
 import numpy as np
-import torch
-import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
-from collections import defaultdict
-import re
-from sklearn.model_selection import KFold
+from sklearn.model_selection import StratifiedKFold
 from sklearn.metrics import accuracy_score, f1_score, roc_auc_score, precision_score, recall_score, confusion_matrix
-from AF.tools import *
+from AF.tools import AfDataset
 from AF.nets import *
+from models.PWSA import MultiModalLongformerQuality
+
 
 
 class AfTrainer:
     def __init__(self, args):
-        self.DATA_DIR = os.path.join(args.raw_data_path, "segments")
+        self.DATA_DIR = os.path.join(args.raw_data_path, "segment")
         self.LEARNING_RATE = 0.0001
         self.BATCH_SIZE = args.batch_size
         self.EPOCHS = args.epochs
-        self.NUM_FOLDS = 5
-
-
-    def get_subject_id_from_path(self, filepath):
-        match = re.search(r'((?:non_)?af_\d+)', os.path.basename(filepath))
-        return match.group(1) if match else None
+        self.NUM_FOLDS = 10
+        self.backbone = args.backbone
 
     def training(self):
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-        subject_to_files = defaultdict(list)
+        all_files = []
+        all_labels = []
 
+        for label_str in ["0", "1"]:
+            class_dir = os.path.join(self.DATA_DIR, label_str)
+            files_in_class = glob.glob(os.path.join(class_dir, "*.npy"))
+            all_files.extend(files_in_class)
+            all_labels.extend([int(label_str)] * len(files_in_class))
 
-        all_files = glob.glob(os.path.join(self.DATA_DIR, "*", "*.npy"))
-        for f_path in all_files:
-            subject_id = self.get_subject_id_from_path(f_path)
-            if subject_id: subject_to_files[subject_id].append(f_path)
-        unique_subjects = np.array(sorted(list(subject_to_files.keys())))
-        print(f"Scan complete. A total of {len(all_files)} files were found, from {len(unique_subjects)} unique subjects.")
+        print(f"扫描完成。共找到 {len(all_files)} 个文件。")
+        print(f"总类别分布: Class 0: {all_labels.count(0)}, Class 1: {all_labels.count(1)}")
 
-        kf = KFold(n_splits=self.NUM_FOLDS, shuffle=True, random_state=42)
+        X_placeholder = np.zeros(len(all_files))
+        skf = StratifiedKFold(n_splits=self.NUM_FOLDS, shuffle=True, random_state=42)
+
         fold_metrics_list = []
 
-        for fold, (train_subject_indices, val_subject_indices) in enumerate(kf.split(unique_subjects)):
+        pos_weight_value = 912 / 488
+        pos_weight = torch.tensor([pos_weight_value], device=device)
+        print(f"使用的固定pos_weight (类别0数/类别1数): {pos_weight_value:.2f}")
+
+        # 修改点: split 不再需要 groups 参数
+        for fold, (train_indices, val_indices) in enumerate(skf.split(X_placeholder, all_labels)):
             print("-" * 50)
-            print(f"Cross-validation: {fold + 1} / {self.NUM_FOLDS} folds")
+            print(f"交叉验证: 第 {fold + 1} / {self.NUM_FOLDS} 折")
 
-            train_subjects = unique_subjects[train_subject_indices]
-            val_subjects = unique_subjects[val_subject_indices]
-
-            train_files, train_labels = [], []
-            for sub in train_subjects:
-                files = subject_to_files[sub]
-                train_files.extend(files)
-                train_labels.extend([int(os.path.basename(os.path.dirname(f))) for f in files])
-
-            val_files, val_labels = [], []
-            for sub in val_subjects:
-                files = subject_to_files[sub]
-                val_files.extend(files)
-                val_labels.extend([int(os.path.basename(os.path.dirname(f))) for f in files])
+            train_files = [all_files[i] for i in train_indices]
+            train_labels = [all_labels[i] for i in train_indices]
+            val_files = [all_files[i] for i in val_indices]
+            val_labels = [all_labels[i] for i in val_indices]
 
             train_dataset = AfDataset(file_paths=train_files, labels=train_labels, augment=True)
             val_dataset = AfDataset(file_paths=val_files, labels=val_labels, augment=False)
+            print(f"创建训练集: {len(train_dataset)} 个样本")
+            print(
+                f"创建验证集: {len(val_dataset)} 个样本 | 标签分布: Class 0: {val_labels.count(0)}, Class 1: {val_labels.count(1)}")
+
             train_loader = DataLoader(dataset=train_dataset, batch_size=self.BATCH_SIZE, shuffle=True, num_workers=2,
                                       pin_memory=True)
             val_loader = DataLoader(dataset=val_dataset, batch_size=self.BATCH_SIZE, shuffle=False, num_workers=2,
                                     pin_memory=True)
 
-            model = Simple1DCNN().to(device)
-            optimizer = optim.Adam(model.parameters(), lr=self.LEARNING_RATE)
-            scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'max', factor=0.1, patience=3)
+            if self.backbone == "mlp":
+                model = MLP()
+            elif self.backbone == "cnn":
+                model = CNN()
+            elif self.backbone == "lstm":
+                model = LSTMModel()
+            elif self.backbone == "transformer":
+                model = TransformerModel()
+            elif self.backbone == "cnnlstm":
+                model = CnnLstmModel()
 
-            neg_count = train_labels.count(0)
-            pos_count = train_labels.count(1)
-            pos_weight = torch.tensor([neg_count / pos_count if pos_count > 0 else 1.0], device=device)
+            elif self.backbone == "pwsa":
+                backbone = MultiModalLongformerQuality(2, 512, 4, 2, 256, 8)
+                checkpoint = torch.load(f"model_saved/{self.backbone}_teacher.pth")
+                backbone.load_state_dict(checkpoint["model_state_dict"])
+                encoder = backbone.encoder
+
+                for param in encoder.parameters():
+                    param.requires_grad = True
+
+                model = FinetuneModel(pre_trained_encoder=encoder, num_classes=1)
+            else:
+                raise ValueError(f"未知的模型类型: {self.backbone}")
+
+
+            model = model.to(device)
+            print(f"模型: {self.backbone}, 参数量: {sum(p.numel() for p in model.parameters()) / 1e6:.6f}M")
+
+            # 优化器与损失函数
+            optimizer = optim.Adam(model.parameters(), lr=self.LEARNING_RATE)
+            scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'max', factor=0.1, patience=3,
+                                                                   verbose=False)
+            # 修改点: 直接使用预先计算好的pos_weight
             criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
 
+            # --- 训练与验证循环 (此部分逻辑正确，无需修改) ---
             for epoch in range(self.EPOCHS):
                 model.train()
                 for inputs, labels in train_loader:
+                    # ... (训练代码不变)
                     inputs, labels = inputs.to(device, non_blocking=True), labels.to(device, non_blocking=True)
                     optimizer.zero_grad()
                     outputs = model(inputs)
@@ -88,47 +113,44 @@ class AfTrainer:
                     optimizer.step()
 
                 model.eval()
-                epoch_labels = []
-                epoch_preds_probs = []
+                epoch_labels, epoch_preds_probs = [], []
                 with torch.no_grad():
                     for inputs, labels in val_loader:
+                        # ... (验证代码不变)
                         inputs, labels = inputs.to(device, non_blocking=True), labels.to(device, non_blocking=True)
                         outputs = model(inputs)
-                        probs = torch.sigmoid(outputs).cpu()
-                        epoch_preds_probs.extend(probs.squeeze().tolist())
+                        # 注意处理squeeze()可能带来的维度问题，尤其是在batch_size=1时
+                        if outputs.ndim > 1:
+                            epoch_preds_probs.extend(torch.sigmoid(outputs).cpu().squeeze().tolist())
+                        else:  # 处理batch_size=1的情况
+                            epoch_preds_probs.append(torch.sigmoid(outputs).cpu().item())
                         epoch_labels.extend(labels.cpu().tolist())
 
+                # ... (指标计算代码不变)
                 epoch_preds_binary = [1 if p > 0.5 else 0 for p in epoch_preds_probs]
-
                 tn, fp, fn, tp = confusion_matrix(epoch_labels, epoch_preds_binary, labels=[0, 1]).ravel()
-
-                accuracy = (tp + tn) / (tp + tn + fp + fn)
-                tpr_recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0  # TPR, Recall, Sensitivity
-                tnr_specificity = tn / (tn + fp) if (tn + fp) > 0 else 0.0  # TNR, Specificity
-                ppv_precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0  # PPV, Precision
+                accuracy = (tp + tn) / (tp + tn + fp + fn) if (tp + tn + fp + fn) > 0 else 0.0
+                tpr_recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
+                tnr_specificity = tn / (tn + fp) if (tn + fp) > 0 else 0.0
+                ppv_precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
                 f1 = 2 * (ppv_precision * tpr_recall) / (ppv_precision + tpr_recall) if (
                                                                                                     ppv_precision + tpr_recall) > 0 else 0.0
+                auc = roc_auc_score(epoch_labels, epoch_preds_probs)
 
-                try:
-                    auc = roc_auc_score(epoch_labels, epoch_preds_probs)
-                except ValueError:
-                    auc = 0.5
-
-                print(
-                    f"  Epoch {epoch + 1}/{self.EPOCHS} | AUC: {auc:.4f} | F1: {f1:.4f} | Acc: {accuracy:.4f} | TPR: {tpr_recall:.4f} | TNR: {tnr_specificity:.4f} | PPV: {ppv_precision:.4f}")
-
+                if (epoch + 1) % 5 == 0:
+                    print(f"  Epoch {epoch + 1}/{self.EPOCHS} | AUC: {auc:.4f} | F1: {f1:.4f}")
                 scheduler.step(auc)
 
+            # ... (结果记录与打印不变)
             final_metrics = {'acc': accuracy, 'tpr': tpr_recall, 'tnr': tnr_specificity, 'ppv': ppv_precision, 'f1': f1,
                              'auc': auc}
             fold_metrics_list.append(final_metrics)
             print(f"第 {fold + 1} 折完成。最终AUC: {auc:.4f}, F1-Score: {f1:.4f}")
 
+        # ... (最终结果总结不变)
         print("-" * 50)
-        print(f"{self.NUM_FOLDS}-fold cross-validation completed.")
-
+        print(f"{self.NUM_FOLDS}折交叉验证完成。")
         for key in fold_metrics_list[0].keys():
             values = [m[key] for m in fold_metrics_list]
-            mean_val = np.mean(values)
-            std_val = np.std(values)
-            print(f"Average {key.upper()}: {mean_val:.4f} ± {std_val:.4f}")
+            mean_val, std_val = np.mean(values), np.std(values)
+            print(f"平均 {key.upper()}: {mean_val:.4f} ± {std_val:.4f}")

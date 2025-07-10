@@ -1,5 +1,4 @@
 import argparse
-# dataset.py 的内容保持不变
 from dataset import dataset
 import numpy as np
 from tqdm import tqdm
@@ -46,6 +45,7 @@ def get_args():
     parser.add_argument('--out_dim', type=int, default=512, help='Output feature dimension.')
     # parser.add_argument("--local_rank", type=int, default=-1, help="Local rank for distributed training")
     parser.add_argument("--num_workers", type=int, default=16, help="Number of workers for data loading.")
+    parser.add_argument("--load_weights", type=bool, default=True, help="Load newest weights.")
 
     return parser.parse_args()
 
@@ -101,6 +101,24 @@ if __name__ == '__main__':
     student = student.to(device)
     teacher = teacher.to(device)
     spectrum = FourierSpectrumProcessor(target_sequence_length=args.out_dim).to(device)
+
+    if args.load_weights:
+        teacher_ckpt = utils.find_latest_checkpoint(args.model_save_path, args.backbone, "teacher")
+        if teacher_ckpt:
+            checkpoint = torch.load(teacher_ckpt)
+            teacher.load_state_dict(checkpoint['model_state_dict'])
+            print(f"Loaded teacher weights from {teacher_ckpt}")
+        else:
+            print("No teacher checkpoint found.")
+
+        student_ckpt = utils.find_latest_checkpoint(args.model_save_path, args.backbone, "student")
+        if student_ckpt:
+            checkpoint = torch.load(student_ckpt)
+            student.load_state_dict(checkpoint['model_state_dict'])
+            print(f"Loaded student weights from {student_ckpt}")
+        else:
+            print("No student checkpoint found.")
+
 
     if torch.cuda.device_count() > 1:
         print(f"Using {torch.cuda.device_count()} GPUs!")
