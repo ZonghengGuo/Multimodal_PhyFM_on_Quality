@@ -155,6 +155,42 @@ class FinetuneModel(nn.Module):
 
         return logits
 
+class FinetuneCNNModel(nn.Module):
+    def __init__(self, pre_trained_encoder, num_classes, embedding_dim=512):
+        super(FinetuneCNNModel, self).__init__()
+        self.encoder = pre_trained_encoder
+        self.conv_head = nn.Sequential(
+            nn.Conv1d(in_channels=embedding_dim, out_channels=embedding_dim, kernel_size=3, padding=1),
+            nn.BatchNorm1d(embedding_dim),
+            nn.ReLU(),
+            nn.Conv1d(in_channels=embedding_dim, out_channels=embedding_dim//2, kernel_size=3, padding=1),
+            nn.BatchNorm1d(embedding_dim//2),
+            nn.ReLU(),
+            nn.Conv1d(in_channels=embedding_dim//2, out_channels=embedding_dim//4, kernel_size=3, padding=1),
+            nn.BatchNorm1d(embedding_dim//4),
+            nn.ReLU(),
+            nn.ReLU(),
+            nn.Conv1d(in_channels=embedding_dim//4, out_channels=embedding_dim // 4, kernel_size=3, padding=1),
+            nn.BatchNorm1d(embedding_dim // 4),
+            nn.ReLU(),
+            nn.Conv1d(in_channels=embedding_dim // 4, out_channels=embedding_dim // 8, kernel_size=3, padding=1),
+            nn.BatchNorm1d(embedding_dim // 8),
+            nn.ReLU(),
+            nn.Conv1d(in_channels=embedding_dim // 8, out_channels=embedding_dim // 8, kernel_size=3, padding=1),
+            nn.BatchNorm1d(embedding_dim // 8),
+            nn.ReLU(),
+        )
+        self.classifier = nn.Linear(embedding_dim//8, num_classes)
+
+    def forward(self, x):
+        with torch.no_grad():
+            features = self.encoder(x)
+        features_permuted = features.permute(0, 2, 1)
+        conv_features = self.conv_head(features_permuted)
+        pooled_features = torch.mean(conv_features, dim=2)
+        logits = self.classifier(pooled_features)
+        return logits
+
 
 class CnnLstmModel(nn.Module):
     def __init__(self, num_classes=1,

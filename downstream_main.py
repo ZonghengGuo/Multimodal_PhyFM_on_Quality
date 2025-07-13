@@ -4,6 +4,7 @@ from vtac.train import VtacTrainer
 from AF.preprocess import AFProcessor
 from AF.train import AfTrainer
 from BP.preprocess import PreprocessBP
+from BP.train import BPTrain
 
 
 def get_args():
@@ -25,7 +26,7 @@ def get_args():
                         help='Path to the directory where trained models will be saved.')
     parser.add_argument('--batch_size', type=int, default=128, help='Batch size of training.')
     parser.add_argument('--rsfreq', type=int, default=300, help='resampling rate (Hz)')
-    parser.add_argument('--epochs', type=int, default=20, help='number of epochs')
+    parser.add_argument('--epochs', type=int, default=50, help='number of epochs')
 
     return parser.parse_args()
 
@@ -52,14 +53,6 @@ if __name__ == '__main__':
         if args.stage == "preprocessing":
             processor = PreprocessBP(args)
             processor.process_save()
-
-
-
-
-
-
-
-
-
-
-
+        elif args.stage == "training":
+            trainer = BPTrain(args)
+            trainer.training()

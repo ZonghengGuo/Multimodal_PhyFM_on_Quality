@@ -8,7 +8,7 @@ from sklearn.metrics import accuracy_score, f1_score, roc_auc_score, precision_s
 from AF.tools import AfDataset
 from AF.nets import *
 from models.PWSA import MultiModalLongformerQuality
-
+from models.Transformer import MultiModalTransformerQuality
 
 
 class AfTrainer:
@@ -44,7 +44,6 @@ class AfTrainer:
         pos_weight = torch.tensor([pos_weight_value], device=device)
         print(f"使用的固定pos_weight (类别0数/类别1数): {pos_weight_value:.2f}")
 
-        # 修改点: split 不再需要 groups 参数
         for fold, (train_indices, val_indices) in enumerate(skf.split(X_placeholder, all_labels)):
             print("-" * 50)
             print(f"交叉验证: 第 {fold + 1} / {self.NUM_FOLDS} 折")
@@ -54,7 +53,12 @@ class AfTrainer:
             val_files = [all_files[i] for i in val_indices]
             val_labels = [all_labels[i] for i in val_indices]
 
-            train_dataset = AfDataset(file_paths=train_files, labels=train_labels, augment=True)
+            print(f"原始训练集大小: {len(train_files)}")
+            train_files_augmented = train_files * 10
+            train_labels_augmented = train_labels * 10
+            print(f"扩充后训练集大小: {len(train_files_augmented)}")
+
+            train_dataset = AfDataset(file_paths=train_files_augmented, labels=train_labels_augmented, augment=True)
             val_dataset = AfDataset(file_paths=val_files, labels=val_labels, augment=False)
             print(f"创建训练集: {len(train_dataset)} 个样本")
             print(
@@ -76,16 +80,42 @@ class AfTrainer:
             elif self.backbone == "cnnlstm":
                 model = CnnLstmModel()
 
+            elif self.backbone == "transformer_quality":
+                backbone = MultiModalTransformerQuality(2, 512, 4, 2, 256)
+                checkpoint = torch.load(f"model_saved/transformer_teacher.pth")
+                backbone.load_state_dict(checkpoint["model_state_dict"])
+                encoder = backbone.encoder
+                for param in encoder.parameters():
+                    param.requires_grad = True
+                model = FinetuneModel(pre_trained_encoder=encoder, num_classes=1)
+
             elif self.backbone == "pwsa":
                 backbone = MultiModalLongformerQuality(2, 512, 4, 2, 256, 8)
                 checkpoint = torch.load(f"model_saved/{self.backbone}_teacher.pth")
                 backbone.load_state_dict(checkpoint["model_state_dict"])
                 encoder = backbone.encoder
-
                 for param in encoder.parameters():
                     param.requires_grad = True
-
                 model = FinetuneModel(pre_trained_encoder=encoder, num_classes=1)
+
+            elif self.backbone == "pwsa_large":
+                backbone = MultiModalLongformerQuality(2, 512, 4, 21, 512, 8)
+                checkpoint = torch.load(f"model_saved/{self.backbone}_teacher.pth")
+                backbone.load_state_dict(checkpoint["model_state_dict"])
+                encoder = backbone.encoder
+                for param in encoder.parameters():
+                    param.requires_grad = True
+                model = FinetuneModel(pre_trained_encoder=encoder, num_classes=1)
+
+            elif self.backbone == "pwsa_huge":
+                backbone = MultiModalLongformerQuality(2, 512, 8, 50, 2048, 8)
+                checkpoint = torch.load(f"model_saved/{self.backbone}_teacher.pth")
+                backbone.load_state_dict(checkpoint["model_state_dict"])
+                encoder = backbone.encoder
+                for param in encoder.parameters():
+                    param.requires_grad = True
+                model = FinetuneModel(pre_trained_encoder=encoder, num_classes=1)
+
             else:
                 raise ValueError(f"未知的模型类型: {self.backbone}")
 
@@ -95,8 +125,7 @@ class AfTrainer:
 
             # 优化器与损失函数
             optimizer = optim.Adam(model.parameters(), lr=self.LEARNING_RATE)
-            scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'max', factor=0.1, patience=3,
-                                                                   verbose=False)
+            scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'max', factor=0.1, patience=3)
             # 修改点: 直接使用预先计算好的pos_weight
             criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
 
@@ -141,13 +170,11 @@ class AfTrainer:
                     print(f"  Epoch {epoch + 1}/{self.EPOCHS} | AUC: {auc:.4f} | F1: {f1:.4f}")
                 scheduler.step(auc)
 
-            # ... (结果记录与打印不变)
             final_metrics = {'acc': accuracy, 'tpr': tpr_recall, 'tnr': tnr_specificity, 'ppv': ppv_precision, 'f1': f1,
                              'auc': auc}
             fold_metrics_list.append(final_metrics)
             print(f"第 {fold + 1} 折完成。最终AUC: {auc:.4f}, F1-Score: {f1:.4f}")
 
-        # ... (最终结果总结不变)
         print("-" * 50)
         print(f"{self.NUM_FOLDS}折交叉验证完成。")
         for key in fold_metrics_list[0].keys():
