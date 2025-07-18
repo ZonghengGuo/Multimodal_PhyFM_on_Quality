@@ -1,8 +1,8 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import torchaudio
-from torchaudio.transforms import Spectrogram, AmplitudeToDB
+# import torchaudio
+# from torchaudio.transforms import Spectrogram, AmplitudeToDB
 
 
 class SingleChannelResNet(nn.Module):

@@ -6,6 +6,8 @@ import pandas as pd
 import torch
 import numpy as np
 from tqdm import tqdm
+from scipy import signal
+import math
 
 
 class PreprocessVtac:
@@ -84,6 +86,20 @@ class PreprocessVtac:
         scale = feature_range[1] - feature_range[0]
         return feature_range[0] + (data - min_val) * scale / (max_val - min_val)
 
+    def upsample_signal_scipy_adjusted(self, input_signal: np.ndarray, fs_in: int, fs_out: int) -> np.ndarray:
+        if input_signal.ndim != 2 or input_signal.shape[0] != 2:
+            raise ValueError("输入信号必须是一个形状为 (2, n_samples) 的 NumPy 数组。")
+        common_divisor = math.gcd(fs_out, fs_in)
+        up_factor = fs_out // common_divisor
+        down_factor = fs_in // common_divisor
+
+        # *** 关键改动 ***
+        # 将 axis 参数从 0 改为 1，以沿着采样点维度进行操作
+        resampled_signal = signal.resample_poly(input_signal, up=up_factor, down=down_factor, axis=1)
+
+        return resampled_signal
+
+
     def preprocess_save(self):
         dataset_path = self.dataset_path
         save_path = dataset_path + "/out/raw"
@@ -113,6 +129,8 @@ class PreprocessVtac:
                 sample_length = record.sig_len
                 sig_names = record.sig_name
 
+                print(sample_length)
+
                 sample_record = self.interpolate_nan_multichannel(sample_record)
 
                 if "PLETH" not in sig_names or "II" not in sig_names :
@@ -128,6 +146,9 @@ class PreprocessVtac:
                 required_samples.append(self.min_max_norm(self.filter_ecg_channel(wave_ii)))
 
                 required_samples = np.array(required_samples)
+
+
+                required_samples = self.upsample_signal_scipy_adjusted(required_samples, 250, 300)
 
                 # get label
                 decision_value = event_label_df.loc[event_label_df['event'] == sample_name, 'decision'].values[0]

@@ -5,6 +5,7 @@ from BP.tools import *
 import torch.nn as nn
 from models.PWSA import MultiModalLongformerQuality
 from models.Transformer import MultiModalTransformerQuality
+from models.ResNet import MultiModalResNet101Quality
 
 
 class BPTrain:
@@ -49,6 +50,11 @@ class BPTrain:
             for param in encoder.parameters():
                 param.requires_grad = True
 
+            model = finetune.FinetuneModel(pre_trained_encoder=encoder, num_classes=2)
+
+        elif self.backbone == "resnet_quality":
+            backbone = MultiModalResNet101Quality(2, 200, 18)
+            encoder = backbone.encoder
             model = finetune.FinetuneModel(pre_trained_encoder=encoder, num_classes=2)
 
         elif self.backbone == "pwsa":

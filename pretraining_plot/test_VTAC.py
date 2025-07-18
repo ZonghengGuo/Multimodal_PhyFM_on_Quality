@@ -6,12 +6,12 @@ import numpy as np
 labels = ['ACC', 'TPR', 'TNR', 'PPV', 'F1', 'AUC']
 
 # Data for "with-pretraining"
-with_pretraining_means = [0.8657, 0.8075, 0.8970, 0.8100, 0.8071, 0.9359]
-with_pretraining_std = [0.0276, 0.0576, 0.0324, 0.0504, 0.0403, 0.0174]
+with_pretraining_means = [0.8221, 0.7983, 0.8307, 0.6333, 0.7063, 0.9099]
+with_pretraining_std = [0.072, 0.0649, 0.0645, 0.0331, 0.0243, 0.0156]
 
 # Data for "without-Pretraining"
-without_pretraining_means = [0.6407, 0.6302, 0.6473, 0.3939, 0.4655, 0.6730]
-without_pretraining_std = [0.1726, 0.4165, 0.3670, 0.3091, 0.3257, 0.1828]
+without_pretraining_means = [0.7678, 0.2672, 0.9546, 0.6874, 0.3844, 0.7892]
+without_pretraining_std = [0.0774, 0.0812, 0.0712, 0.0382, 0.0246, 0.0168]
 
 
 # --- 2. Plotting Setup ---
@@ -50,9 +50,9 @@ ax.set_xticklabels(labels, fontsize=11)
 # Display legend
 ax.legend()
 
-# Add value labels on top of the bars
-ax.bar_label(rects1, padding=3, fmt='%.4f')
-ax.bar_label(rects2, padding=3, fmt='%.4f')
+# # Add value labels on top of the bars
+# ax.bar_label(rects1, padding=3, fmt='%.4f')
+# ax.bar_label(rects2, padding=3, fmt='%.4f')
 
 # Optimize layout
 fig.tight_layout()

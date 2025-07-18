@@ -221,35 +221,63 @@ class MultiModalLongformerQuality(nn.Module):
         return signal_features, feat_amp, feat_pha
 
 
-if __name__ == "__main__":
-    batch_size = 2
-    input_channels = 2
-    seq_len = 9000
-
-    d_model = 512
-    nhead = 4
-    num_encoder_layers = 21
-
-    dim_feedforward = 512
-    window_size = 8
-
-    model = MultiModalLongformerQuality(
-        input_channels, d_model, nhead, num_encoder_layers, dim_feedforward, window_size
+def print_trainable_parameters(model):
+    """打印模型中可训练参数的数量"""
+    trainable_params = 0
+    all_param = 0
+    for _, param in model.named_parameters():
+        all_param += param.numel()
+        if param.requires_grad:
+            trainable_params += param.numel()
+    print(
+        f"trainable params: {trainable_params} || all params: {all_param} || trainable%: {100 * trainable_params / all_param:.2f}"
     )
 
-    total_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
-    params_in_M = total_params / 1_000_000
-    print(f"模型的总参数量: {params_in_M:.2f} M")
 
-    # 模拟输入数据
-    dummy_input = torch.randn(batch_size, input_channels, seq_len)
-    print(f"输入数据 shape: {dummy_input.shape}")
+if __name__ == "__main__":
+    # batch_size = 2
+    # input_channels = 2
+    # seq_len = 9000
+    #
+    # d_model = 512
+    # nhead = 4
+    # num_encoder_layers = 21
+    #
+    # dim_feedforward = 512
+    # window_size = 8
+    #
+    # model = MultiModalLongformerQuality(
+    #     input_channels, d_model, nhead, num_encoder_layers, dim_feedforward, window_size
+    # )
+    #
+    # total_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    # params_in_M = total_params / 1_000_000
+    # print(f"模型的总参数量: {params_in_M:.2f} M")
+    #
+    # # 模拟输入数据
+    # dummy_input = torch.randn(batch_size, input_channels, seq_len)
+    # print(f"输入数据 shape: {dummy_input.shape}")
+    #
+    # # 前向传播
+    # output_features, feat_amp, feat_pha = model(dummy_input)
+    #
+    # # 检查输出形状是否符合预期
+    # # TemporalConv输出长度为18，所以特征输出长度也是18
+    # print(f"输出特征 shape: {output_features.shape}")
+    # print(f"amp shape: {feat_amp.shape}")
+    # print(f"pha shape: {feat_pha.shape}")
 
-    # 前向传播
-    output_features, feat_amp, feat_pha = model(dummy_input)
+    out_dim = 512
+    window_size = 16
 
-    # 检查输出形状是否符合预期
-    # TemporalConv输出长度为18，所以特征输出长度也是18
-    print(f"输出特征 shape: {output_features.shape}")
-    print(f"amp shape: {feat_amp.shape}")
-    print(f"pha shape: {feat_pha.shape}")
+    backbone = MultiModalLongformerQuality(
+        input_channels=2,
+        d_model=out_dim,
+        nhead=4,
+        num_encoder_layers=2,
+        out_dim=256,  # dim_feedforward
+        window_size=window_size
+    )
+
+    print("--- 原始模型 ---")
+    print_trainable_parameters(backbone)

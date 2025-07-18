@@ -4,7 +4,6 @@ import torch.nn.functional as F
 
 
 class Bottleneck(nn.Module):
-    # 修改点 1: 将 expansion 设为 2 以支持 18 个输出通道
     expansion = 2
 
     def __init__(self, in_planes, planes, stride=1, kernel_size=3, padding=1):
@@ -40,12 +39,10 @@ class ResNet(nn.Module):
         self.conv0 = nn.Conv1d(input_channels, d_model, kernel_size=201, stride=3, padding=100)
         self.bn1 = nn.BatchNorm1d(d_model)
 
-        # 修改点 2: 调整 Stride 使得总步长为 18 (3 * 3 * 2 * 1 * 1)
         self.stage0 = self._make_layer(block, d_model, num_blocks[0], stride=3, kernel_size=3, padding=1)
         self.stage1 = self._make_layer(block, d_model, num_blocks[1], stride=2, kernel_size=3, padding=1)  # stride=2
         self.stage2 = self._make_layer(block, d_model, num_blocks[2], stride=1, kernel_size=3, padding=1)  # stride=1
 
-        # 这里的逻辑保持不变，但现在 block.expansion 是 2
         if output_channels % block.expansion != 0:
             raise ValueError(
                 f"output_channels ({output_channels}) must be divisible by block.expansion ({block.expansion})")
@@ -74,11 +71,32 @@ class ResNet(nn.Module):
 def resnet101(input_channels, d_model, output_channels):
     return ResNet(Bottleneck, [3, 8, 23, 3], input_channels, d_model, output_channels)
 
+def resnet18(input_channels, d_model, output_channels):
+    return ResNet(Bottleneck, [2, 2, 2, 2], input_channels, d_model, output_channels)
 
-class MultiModalResNetQuality(nn.Module):
+class MultiModalResNet101Quality(nn.Module):
     def __init__(self, input_channels, d_model, encoder_output_channels):
-        super(MultiModalResNetQuality, self).__init__()
+        super(MultiModalResNet101Quality, self).__init__()
         self.encoder = resnet101(
+            input_channels=input_channels,
+            d_model=d_model,
+            output_channels=encoder_output_channels
+        )
+
+    def encode(self, signal_data):
+        signal_features = self.encoder(signal_data)
+        return signal_features
+
+
+    def forward(self, signal_data):
+        signal_features = self.encode(signal_data)
+        return signal_features
+
+
+class MultiModalResNet18Quality(nn.Module):
+    def __init__(self, input_channels, d_model, encoder_output_channels):
+        super(MultiModalResNet18Quality, self).__init__()
+        self.encoder = resnet18(
             input_channels=input_channels,
             d_model=d_model,
             output_channels=encoder_output_channels
@@ -98,12 +116,13 @@ if __name__ == "__main__":
     batch_size = 4
     input_channels = 2
     seq_len = 9000
-    d_model = 200
+    d_model = 130
 
     target_channels = 18
     target_seq_len = 500
 
-    model = MultiModalResNetQuality(input_channels, d_model, encoder_output_channels=target_channels)
+    # model = MultiModalResNet101Quality(input_channels, d_model, encoder_output_channels=target_channels)
+    model = MultiModalResNet101Quality(input_channels, d_model, encoder_output_channels=target_channels)
 
     total_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     params_in_M = total_params / 1_000_000

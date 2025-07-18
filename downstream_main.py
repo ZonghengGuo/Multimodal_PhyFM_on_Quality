@@ -26,7 +26,9 @@ def get_args():
                         help='Path to the directory where trained models will be saved.')
     parser.add_argument('--batch_size', type=int, default=128, help='Batch size of training.')
     parser.add_argument('--rsfreq', type=int, default=300, help='resampling rate (Hz)')
-    parser.add_argument('--epochs', type=int, default=50, help='number of epochs')
+    parser.add_argument('--epochs', type=int, default=500, help='number of epochs')
+    parser.add_argument('--pretrained', type=int, default=True, help='number of epochs')
+
 
     return parser.parse_args()
 

@@ -71,30 +71,45 @@ import matplotlib.pyplot as plt
 from torch.utils.data import DataLoader, random_split
 from tqdm import tqdm
 
-def plot_predictions(model, dataloader, device, num_plots=5):
+
+def evaluate_and_plot_single_sample(model, dataloader, device, save_dir="."):
     model.eval()
-    plt.figure(figsize=(15, num_plots * 3))
-
     with torch.no_grad():
-        phy_signals, true_bps = next(iter(dataloader))
-        phy_signals = phy_signals.to(device)
-        predicted_bps = model(phy_signals).cpu().numpy()
-        true_bps = true_bps.cpu().numpy()
+        phy_signals_batch, true_bps_batch = next(iter(dataloader))
+        phy_sample = phy_signals_batch[0].unsqueeze(0).to(device)
+        true_bp = true_bps_batch[0].cpu().numpy()
+        predicted_bp = model(phy_sample).squeeze(0).cpu().numpy()
 
-    for i in range(min(num_plots, len(true_bps))):
-        plt.subplot(num_plots, 1, i + 1)
-        plt.plot(true_bps[i], label="Ground Truth BP", color='blue', alpha=0.8)
-        plt.plot(predicted_bps[i], label="Predicted BP", color='red', linestyle='--')
-        plt.title(f"Sample #{i + 1}")
-        plt.ylabel("Blood Pressure")
-        plt.legend()
-        if i == num_plots - 1:
-            plt.xlabel("Time Steps")
+    output_data = np.stack((true_bp, predicted_bp), axis=1)
 
+    os.makedirs(save_dir, exist_ok=True)
+    save_filename = os.path.join(save_dir, "bp_waveform_comparison.txt")
+
+    np.savetxt(
+        save_filename,
+        output_data,
+        fmt='%.4f',
+        header='Ground_Truth_BP, Predicted_BP',
+        delimiter=','
+    )
+    print(f"Waveform data saved to {save_filename}")
+
+    plt.figure(figsize=(12, 6))
+    plt.plot(true_bp, label="Ground Truth BP", color='blue', alpha=0.8)
+    plt.plot(predicted_bp, label="Predicted BP", color='red', linestyle='--')
+    plt.title("BP Waveform Comparison (Single Sample)")
+    plt.xlabel("Time Steps")
+    plt.ylabel("Blood Pressure")
+    plt.legend()
+    plt.grid(True, linestyle='--', alpha=0.6)
     plt.tight_layout()
-    plt.savefig("bp_prediction_vs_truth.png")
-    print("Prediction plot saved as bp_prediction_vs_truth.png")
+
+    plot_filename = os.path.join(save_dir, "bp_waveform_comparison.png")
+    plt.savefig(plot_filename)
+    print(f"Comparison plot saved as {plot_filename}")
+
     plt.show()
+
 
 
 if __name__ == '__main__':
@@ -103,16 +118,20 @@ if __name__ == '__main__':
         "model_path": "./model_saved/pwsa_teacher.pth",
         "encoder_output_dim": 512,
         "backbone": "pwsa",
-        "epochs": 20,
-        "batch_size": 32,
+        "epochs": 100,
+        "batch_size": 128,
         "learning_rate": 1e-4,
+        "random_seed": 42
     }
+
+    torch.manual_seed(CONFIG["random_seed"])
+    np.random.seed(CONFIG["random_seed"])
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
 
-    backbone = MultiModalLongformerQuality(2, 512, 4, 2, 256, 8)
-    checkpoint = torch.load(f"model_saved/pwsa_teacher.pth")
+    backbone = MultiModalLongformerQuality(2, 512, 4, 21, 512, 8)
+    checkpoint = torch.load(f"model_saved/pwsa_large_teacher.pth")
     backbone.load_state_dict(checkpoint["model_state_dict"])
     encoder = backbone.encoder
 
@@ -166,5 +185,6 @@ if __name__ == '__main__':
     print("Training finished!")
     torch.save(model.state_dict(), 'bp_regressor_final.pth')
 
-    print("Plotting predictions from validation set...")
-    plot_predictions(model, val_loader, device, num_plots=5)
+    print("\nEvaluating and plotting a single, consistent sample from the validation set...")
+
+    evaluate_and_plot_single_sample(model, val_loader, device, save_dir="./results")

@@ -9,6 +9,8 @@ from AF.tools import AfDataset
 from AF.nets import *
 from models.PWSA import MultiModalLongformerQuality
 from models.Transformer import MultiModalTransformerQuality
+from models.Mamba import MultiModalMambaQuality
+from models.ResNet import MultiModalResNet101Quality
 
 
 class AfTrainer:
@@ -80,9 +82,23 @@ class AfTrainer:
             elif self.backbone == "cnnlstm":
                 model = CnnLstmModel()
 
+            elif self.backbone == "resnet":
+                backbone = MultiModalResNet101Quality(2, 200, 18)
+                encoder = backbone.encoder
+                model = FinetuneModel(pre_trained_encoder=encoder, num_classes=1)
+
             elif self.backbone == "transformer_quality":
                 backbone = MultiModalTransformerQuality(2, 512, 4, 2, 256)
                 checkpoint = torch.load(f"model_saved/transformer_teacher.pth")
+                backbone.load_state_dict(checkpoint["model_state_dict"])
+                encoder = backbone.encoder
+                for param in encoder.parameters():
+                    param.requires_grad = True
+                model = FinetuneModel(pre_trained_encoder=encoder, num_classes=1)
+
+            elif self.backbone == "mamba":
+                backbone = MultiModalMambaQuality(2, 400, 2, 256)
+                checkpoint = torch.load(f"model_saved/{self.backbone}_teacher.pth")
                 backbone.load_state_dict(checkpoint["model_state_dict"])
                 encoder = backbone.encoder
                 for param in encoder.parameters():

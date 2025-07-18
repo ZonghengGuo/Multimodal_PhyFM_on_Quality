@@ -8,20 +8,21 @@ import random
 import numpy as np
 import sklearn
 from models.Transformer import MultiModalTransformerQuality
-from models.ResNet import MultiModalResNetQuality
+from models.ResNet import MultiModalResNet101Quality
 from models.Mamba import MultiModalMambaQuality
 from models.PWSA import MultiModalLongformerQuality
 
 
 class VtacTrainer:
     def __init__(self, args):
-        self.train_path = os.path.join(args.dataset_name, "out/lead_selected/train.pt")
-        self.val_path = os.path.join(args.dataset_name, "out/lead_selected/val.pt")
-        self.test_path = os.path.join(args.dataset_name, "out/lead_selected/test.pt")
+        self.train_path = os.path.join(args.raw_data_path, "out/lead_selected/train.pt")
+        self.val_path = os.path.join(args.raw_data_path, "out/lead_selected/val.pt")
+        self.test_path = os.path.join(args.raw_data_path, "out/lead_selected/test.pt")
         self.backbone = args.backbone
         self.out_dim = args.out_dim
         self.window_size = args.min_lr
         self.batch_size = args.batch_size
+        self.pretrained = args.pretrained
 
     def training(self):
         SEED = 1
@@ -55,16 +56,42 @@ class VtacTrainer:
         positive_class_weight = 4
 
         if self.backbone == "pwsa":
-            backbone = MultiModalLongformerQuality(2, self.out_dim, 4, 2, 256, self.window_size)
+            backbone = MultiModalLongformerQuality(2, 512, 4, 2, 256, 8)
         elif self.backbone == 'transformer':
             backbone = MultiModalTransformerQuality(2, self.out_dim, 4, 2, 256)
         elif self.backbone == 'resnet':
-            backbone = MultiModalResNetQuality(2, self.out_dim, 18)
+            backbone = MultiModalResNet101Quality(2, self.out_dim, 18)
         elif self.backbone == 'mamba':
             backbone = MultiModalMambaQuality(2, self.out_dim, 2, 256)
+        elif self.backbone == "pwsa_large":
+            backbone = MultiModalLongformerQuality(2, 512, 4, 21, 512, 8)
+        elif self.backbone == "pwsa_huge":
+            backbone = MultiModalLongformerQuality(2, 512, 8, 50, 2048, 8)
+
         else:
             raise ValueError(
                 f"Unsupported backbone: '{self.backbone}'. Please choose from ['pwas', 'resnet', 'transformer', 'mamba'].")
+
+        checkpoint = torch.load(f"model_saved/{self.backbone}_teacher.pth")
+        backbone.load_state_dict(checkpoint["model_state_dict"])
+        encoder = backbone.encoder
+
+        # config = LoraConfig(
+        #     r=32,
+        #     lora_alpha=64,  # double of r
+        #     target_modules=["self_attn", "linear1", "linear2"],
+        #     lora_dropout=0.05,
+        #     bias="none",
+        # )
+
+        # encoder = get_peft_model(encoder, config)
+        #
+        # print(f"Load model {self.backbone} successfully!!!")
+
+        for param in encoder.parameters():
+            param.requires_grad = True
+
+        model = FinetuneModel(encoder)
 
         params_training = {
             "framework": "self.backbone",
@@ -113,18 +140,6 @@ class VtacTrainer:
         iterator_train = DataLoader(dataset_train, **params)
         iterator_test = DataLoader(dataset_eval, **params)
 
-        # Todo: change it into real path
-        checkpoint = torch.load(f"model_saved/{self.backbone}_teacher.pth")
-        backbone.load_state_dict(checkpoint["model_state_dict"])
-        encoder = backbone.encoder
-
-        print(f"Load model {self.backbone} successfully!!!")
-
-        for param in encoder.parameters():
-            param.requires_grad = True
-
-        model = FinetuneModel(pre_trained_encoder=encoder, num_classes=1)
-
         logger.info(model)
         logger.info(
             "Num of Parameters: {}M".format(
@@ -161,12 +176,12 @@ class VtacTrainer:
             for b, batch in enumerate(
                     iterator_train, start=1
             ):  # signal_train, alarm_train, y_train, signal_test, alarm_test, y_test = batch
-                loss, Y_train_prediction, y_train = train_model(
+                loss, differ_loss, Y_train_prediction, y_train = train_model(
                     batch,
                     model,
                     loss_ce,
                     device,
-                    weight=0
+                    weight=1.5
                 )
 
                 train_loss += loss.item()
@@ -213,17 +228,17 @@ class VtacTrainer:
             sen = types_TP / (types_TP + types_FN)
             spec = types_TN / (types_TN + types_FP)
 
-            if auc > max_auc:
-                max_auc = auc
-                torch.save(
-                    model.state_dict(), os.path.join(model_path, "auc", str(t) + ".pt")
-                )
-
-            if score > max_score:
-                max_score = score
-                torch.save(
-                    model.state_dict(), os.path.join(model_path, "score", str(t) + ".pt")
-                )
+            # if auc > max_auc:
+            #     max_auc = auc
+            #     torch.save(
+            #         model.state_dict(), os.path.join(model_path, "auc", str(t) + ".pt")
+            #     )
+            #
+            # if score > max_score:
+            #     max_score = score
+            #     torch.save(
+            #         model.state_dict(), os.path.join(model_path, "score", str(t) + ".pt")
+            #     )
 
             logger.info(20 * "-")
 

@@ -1,8 +1,29 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
-  <component name="PublishConfigData" serverName="root@connect.cqa1.seetacloud.com:35980 password" remoteFilesAllowedToDisappearOnAutoupload="false" confirmBeforeUploading="false">
+  <component name="PublishConfigData" autoUpload="Always" remoteFilesAllowedToDisappearOnAutoupload="false" confirmBeforeUploading="false">
     <option name="confirmBeforeUploading" value="false" />
     <serverData>
+      <paths name="root@connect.cqa1.seetacloud.com:17714 password">
+        <serverdata>
+          <mappings>
+            <mapping deploy="/root/autodl-tmp/quality" local="$PROJECT_DIR$" />
+          </mappings>
+        </serverdata>
+      </paths>
+      <paths name="root@connect.cqa1.seetacloud.com:23925 password">
+        <serverdata>
+          <mappings>
+            <mapping local="$PROJECT_DIR$" web="/" />
+          </mappings>
+        </serverdata>
+      </paths>
+      <paths name="root@connect.cqa1.seetacloud.com:27391 password">
+        <serverdata>
+          <mappings>
+            <mapping deploy="/root/autodl-tmp/quality" local="$PROJECT_DIR$" />
+          </mappings>
+        </serverdata>
+      </paths>
       <paths name="root@connect.cqa1.seetacloud.com:31127 password">
         <serverdata>
           <mappings>
@@ -25,6 +46,13 @@
         </serverdata>
       </paths>
       <paths name="root@connect.cqa1.seetacloud.com:44675 password">
+        <serverdata>
+          <mappings>
+            <mapping deploy="/root/autodl-tmp/quality" local="$PROJECT_DIR$" />
+          </mappings>
+        </serverdata>
+      </paths>
+      <paths name="root@connect.cqa1.seetacloud.com:47156 password">
         <serverdata>
           <mappings>
             <mapping deploy="/root/autodl-tmp/quality" local="$PROJECT_DIR$" />
@@ -60,5 +88,6 @@
         </serverdata>
       </paths>
     </serverData>
+    <option name="myAutoUpload" value="ALWAYS" />
   </component>
 </project>

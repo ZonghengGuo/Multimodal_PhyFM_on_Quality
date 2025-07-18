@@ -6,7 +6,8 @@ from pretrainer import utils
 from models.Transformer import FourierSpectrumProcessor
 from pretrainer.losses import EMALoss, calculate_rec_loss
 from models.Transformer import MultiModalTransformerQuality
-from models.ResNet import MultiModalResNetQuality
+from models.ResNet import MultiModalResNet101Quality
+from models.ResNet import MultiModalResNet18Quality
 from models.Mamba import MultiModalMambaQuality
 from models.PWSA import MultiModalLongformerQuality
 import torch
@@ -16,7 +17,7 @@ import os
 
 def get_args():
     parser = argparse.ArgumentParser(description='Multimodal_PhyFM_on_Quality Pretraining Stage with DataParallel')
-    parser.add_argument('--batch_size', type=int, default=4096,
+    parser.add_argument('--batch_size', type=int, default=512,
                         help='Number of samples per batch.')
     parser.add_argument('--backbone', type=str, required=True,
                         help='The architecture of the feature extractor')
@@ -88,9 +89,13 @@ if __name__ == '__main__':
     elif args.backbone == 'transformer':
         student = MultiModalTransformerQuality(2, 512, 4, 2, 256)
         teacher = MultiModalTransformerQuality(2, 512, 4, 2, 256)
-    elif args.backbone == 'resnet':
-        student = MultiModalResNetQuality(2, 200, 18)
-        teacher = MultiModalResNetQuality(2, 200, 18)
+    elif args.backbone == 'resnet101':
+        student = MultiModalResNet101Quality(2, 200, 18)
+        teacher = MultiModalResNet101Quality(2, 200, 18)
+    elif args.backbone == 'resnet18':
+        student = MultiModalResNet18Quality(2, 200, 18)
+        teacher = MultiModalResNet18Quality(2, 200, 18)
+
     elif args.backbone == 'mamba':
         student = MultiModalMambaQuality(2, 400, 2, 256)
         teacher = MultiModalMambaQuality(2, 400, 2, 256)
@@ -179,7 +184,7 @@ if __name__ == '__main__':
 
             x1, x2 = x1.to(device, dtype=torch.float32), x2.to(device, dtype=torch.float32)
 
-            if args.backbone == 'resnet':
+            if args.backbone == 'resnet101' or args.backbone == 'resnet18':
                 teacher_feature = teacher(x1)
                 student_feature = student(x2)
                 EMA_loss = self_distill_loss(student_feature, teacher_feature)
@@ -212,7 +217,7 @@ if __name__ == '__main__':
 
             losses_per_epoch.append(loss.item())
 
-            if args.backbone == 'resnet':
+            if args.backbone == 'resnet101' or args.backbone == 'resnet18':
                 pbar.set_description(
                     'Train Epoch: {} [{}/{} ({:.0f}%)] Total Loss: {:.6f} EMA loss: {:.6f}'.format(
                         epoch, batch_idx + 1, len(dataloader),
