@@ -95,7 +95,6 @@ if __name__ == '__main__':
     elif args.backbone == 'resnet18':
         student = MultiModalResNet18Quality(2, 200, 18)
         teacher = MultiModalResNet18Quality(2, 200, 18)
-
     elif args.backbone == 'mamba':
         student = MultiModalMambaQuality(2, 400, 2, 256)
         teacher = MultiModalMambaQuality(2, 400, 2, 256)

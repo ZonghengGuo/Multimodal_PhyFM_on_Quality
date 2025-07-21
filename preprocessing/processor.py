@@ -216,7 +216,7 @@ class BaseProcessor:
             if len(peaks) < 2:
                 return 0.0
 
-                # 2. 灌注指数
+            # 2. 灌注指数
             ac_component = np.max(ppg) - np.min(ppg)
             dc_component = np.mean(ppg)
             perfusion_index = ac_component / dc_component
@@ -232,19 +232,19 @@ class BaseProcessor:
             rel_power_score = np.clip(rel_power * 2, 0, 1)  # 归一化
 
             # 5. 节律性
-            rr_intervals = np.diff(peaks) / fs * 1000
-            rr_cv = np.std(rr_intervals) / np.mean(rr_intervals)
-            rhythm_score = 1 / (1 + rr_cv)
+            # rr_intervals = np.diff(peaks) / fs * 1000
+            # rr_cv = np.std(rr_intervals) / np.mean(rr_intervals)
+            # rhythm_score = 1 / (1 + rr_cv)
 
             # 6. 幅度变化
-            peak_amplitudes = ppg_normalized[peaks]
-            amp_cv = np.std(peak_amplitudes) / np.mean(peak_amplitudes)
-            amp_score = 1 / (1 + amp_cv)
+            # peak_amplitudes = ppg_normalized[peaks]
+            # amp_cv = np.std(peak_amplitudes) / np.mean(peak_amplitudes)
+            # amp_score = 1 / (1 + amp_cv)
 
             # 7. 自相关
-            autocorr = np.correlate(ppg_normalized, ppg_normalized, mode='full')
-            autocorr = autocorr[len(autocorr) // 2:]
-            autocorr_score = np.mean(autocorr[:fs] / autocorr[0])
+            # autocorr = np.correlate(ppg_normalized, ppg_normalized, mode='full')
+            # autocorr = autocorr[len(autocorr) // 2:]
+            # autocorr_score = np.mean(autocorr[:fs] / autocorr[0])
 
             # 8. 熵
             hist, _ = np.histogram(ppg_normalized, bins=20)
@@ -255,13 +255,13 @@ class BaseProcessor:
             # 综合所有指标
             quality_score = (
                     0.2 * snr_score +
-                    0.2 * rhythm_score +
-                    0.1 * amp_score +
-                    0.1 * autocorr_score +
-                    0.1 * entropy_score +
-                    0.1 * perfusion_score +
-                    0.1 * skewness_score +
-                    0.1 * rel_power_score
+                    # 0.2 * rhythm_score +
+                    # 0.1 * amp_score +
+                    # 0.1 * autocorr_score +
+                    0.2 * entropy_score +
+                    0.2 * perfusion_score +
+                    0.2 * skewness_score +
+                    0.2 * rel_power_score
             )
 
             return np.clip(quality_score, 0, 1)
