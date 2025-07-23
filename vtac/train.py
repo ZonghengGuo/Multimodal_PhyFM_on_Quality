@@ -7,6 +7,7 @@ import os
 import random
 import numpy as np
 import sklearn
+import time
 from models.Transformer import MultiModalTransformerQuality
 from models.ResNet import MultiModalResNet101Quality
 from models.Mamba import MultiModalMambaQuality
@@ -52,8 +53,57 @@ class VtacTrainer:
 
         batch_size = self.batch_size
         lr = 0.0001
+        dl = 1.0
         dropout_probability = 0.1
-        positive_class_weight = 4
+        positive_class_weight = 3.54
+
+        params_training = {
+            "framework": "fcn_contrastive",
+            "differ_loss_weight": dl,
+            "weighted_class": positive_class_weight,
+            "learning_rate": lr,
+            "adam_weight_decay": 0.005,
+            "batch_size": batch_size,
+            "max_epoch": 500,
+            "data_length": 7500, }
+        current_time = time.strftime("%Y_%m_%d_%H_%M_%S", time.localtime())
+
+        # save path of trained model
+
+        tuning_name = (
+            f"{batch_size}-{lr}-{dropout_probability}-{positive_class_weight}-{dl}-{SEED}"
+        )
+
+        model_path = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), "models", tuning_name
+        )
+
+        if not any(
+                os.path.exists(os.path.join(model_path, x)) for x in ["", "auc", "score"]
+        ):
+            # os.makedirs(model_path)
+            os.makedirs(os.path.join(model_path, "auc"))
+            os.makedirs(os.path.join(model_path, "score"))
+        save_path = os.path.join(model_path, "results.txt")
+        logger = get_logger(logpath=save_path, filepath=os.path.abspath(__file__))
+        logger.info(params_training)
+
+        model_save_path = os.path.join(
+            model_path, str(params_training["learning_rate"]) + ".pt")
+
+        dataset_train = Dataset_train(trainset_x, trainset_y)
+        dataset_eval = Dataset_train(valset_x, valset_y)
+        dataset_test = Dataset_train(testset_x, testset_y)
+
+        params = {
+            "batch_size": params_training["batch_size"],
+            "shuffle": False,
+            "num_workers": 0,
+        }
+
+        iterator_train = DataLoader(dataset_train, **params)
+        iterator_test = DataLoader(dataset_eval, **params)
+        iterator_heldout = DataLoader(dataset_test, **params)
 
         if self.backbone == "pwsa":
             backbone = MultiModalLongformerQuality(2, 512, 4, 2, 256, 8)
@@ -76,69 +126,10 @@ class VtacTrainer:
         backbone.load_state_dict(checkpoint["model_state_dict"])
         encoder = backbone.encoder
 
-        # config = LoraConfig(
-        #     r=32,
-        #     lora_alpha=64,  # double of r
-        #     target_modules=["self_attn", "linear1", "linear2"],
-        #     lora_dropout=0.05,
-        #     bias="none",
-        # )
-
-        # encoder = get_peft_model(encoder, config)
-        #
-        # print(f"Load model {self.backbone} successfully!!!")
-
         for param in encoder.parameters():
             param.requires_grad = True
 
-        model = FinetuneModel(encoder)
-
-        params_training = {
-            "framework": "self.backbone",
-            "weighted_class": positive_class_weight,
-            "learning_rate": lr,
-            "adam_weight_decay": 0.005,
-            "batch_size": batch_size,
-            "max_epoch": 500,
-            "data_length": 7500,
-        }
-
-
-        # save path of trained model
-        tuning_name = (
-            f"{batch_size}-{lr}-{dropout_probability}-{positive_class_weight}-{SEED}"
-        )
-
-        model_path = os.path.join(
-            os.path.dirname(os.path.abspath(__file__)), "models", tuning_name
-        )
-
-        if not any(
-                os.path.exists(os.path.join(model_path, x)) for x in ["", "auc", "score"]
-        ):
-            # os.makedirs(model_path)
-            os.makedirs(os.path.join(model_path, "auc"))
-            os.makedirs(os.path.join(model_path, "score"))
-        save_path = os.path.join(model_path, "results.txt")
-        logger = get_logger(logpath=save_path, filepath=os.path.abspath(__file__))
-        logger.info(params_training)
-
-        model_save_path = os.path.join(
-            model_path, str(params_training["learning_rate"]) + ".pt"
-        )
-
-        dataset_train = Dataset_train(trainset_x, trainset_y)
-        dataset_eval = Dataset_train(valset_x, valset_y)
-        dataset_test = Dataset_train(testset_x, testset_y)
-
-        params = {
-            "batch_size": params_training["batch_size"],
-            "shuffle": False,
-            "num_workers": 0,
-        }
-
-        iterator_train = DataLoader(dataset_train, **params)
-        iterator_test = DataLoader(dataset_eval, **params)
+        model = FinetuneCNNModel(encoder)
 
         logger.info(model)
         logger.info(
@@ -170,26 +161,34 @@ class VtacTrainer:
 
         for t in range(1, 1 + num_epochs):
             train_loss = 0
+            differ_loss_val = 0
             model = model.train()
             train_TP, train_FP, train_TN, train_FN = 0, 0, 0, 0
 
             for b, batch in enumerate(
                     iterator_train, start=1
             ):  # signal_train, alarm_train, y_train, signal_test, alarm_test, y_test = batch
-                loss, differ_loss, Y_train_prediction, y_train = train_model(
+                loss, Y_train_prediction, y_train = train_model(
                     batch,
                     model,
                     loss_ce,
                     device,
-                    weight=1.5
+                    weight=params_training["differ_loss_weight"],
                 )
 
                 train_loss += loss.item()
-                optimizer.zero_grad()
-                loss.backward()
-                optimizer.step()
 
+                # Zero out gradient, else they will accumulate between epochs
+                optimizer.zero_grad()
+
+                # Backward pass
+                loss.backward()
+
+                # Update parameters
+                optimizer.step()
             train_loss /= b
+            differ_loss_val /= b
+
             eval_loss = 0
             model = model.eval()
             types_TP = 0
@@ -228,17 +227,17 @@ class VtacTrainer:
             sen = types_TP / (types_TP + types_FN)
             spec = types_TN / (types_TN + types_FP)
 
-            # if auc > max_auc:
-            #     max_auc = auc
-            #     torch.save(
-            #         model.state_dict(), os.path.join(model_path, "auc", str(t) + ".pt")
-            #     )
-            #
-            # if score > max_score:
-            #     max_score = score
-            #     torch.save(
-            #         model.state_dict(), os.path.join(model_path, "score", str(t) + ".pt")
-            #     )
+            if auc > max_auc:
+                max_auc = auc
+                torch.save(
+                    model.state_dict(), os.path.join(model_path, "auc", str(t) + ".pt")
+                )
+
+            if score > max_score:
+                max_score = score
+                torch.save(
+                    model.state_dict(), os.path.join(model_path, "score", str(t) + ".pt")
+                )
 
             logger.info(20 * "-")
 

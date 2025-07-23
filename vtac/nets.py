@@ -1,12 +1,13 @@
 import torch
 import torch.nn as nn
-
-
+from vtac.model import fcn
 import torch
 import torch.nn as nn
 
+
 class FinetuneModel(nn.Module):
-    def __init__(self, pre_trained_encoder, num_classes=1, channels=2, chan_1=128, chan_2=256, chan_3=128, ks1=51, ks2=25, ks3=13, dropout_prob=0.5):
+    def __init__(self, pre_trained_encoder, num_classes=1, channels=6, chan_1=64, chan_2=128, chan_3=64, ks1=201,
+                 ks2=101, ks3=51, dropout_prob=0.1):
         super(FinetuneModel, self).__init__()
         self.encoder = pre_trained_encoder
         pd1 = (ks1 - 1) // 2
@@ -34,26 +35,21 @@ class FinetuneModel(nn.Module):
         )
         self.classifier = nn.Linear(64, num_classes)
 
-    def forward(self, x, random_s=None):
-        # features = self.encoder(x)
+    def forward(self, x):
+        features = self.encoder(x)  # [B, 6, 512]
         # pooled_features = torch.mean(features, dim=1)
-        signal = self.convs(x).squeeze(-1)
-        signal = signal.view(-1, signal.size(1))
-        pooled_features = self.signal_feature(signal)
 
-        if random_s is not None:
-            random_s = self.convs(random_s).squeeze(-1)
-            random_s = random_s.view(-1, random_s.size(1))
-            random_s = self.signal_feature(random_s)
-
-            # print(pooled_features.shape, random_s.shape)
-            return self.classifier(pooled_features), pooled_features, random_s
+        pooled_features = self.convs(features)
+        print(pooled_features.shape)
+        # signal = signal.view(-1, signal.size(1))
+        # pooled_features = self.signal_feature(signal)
 
         logits = self.classifier(pooled_features)
-        return pooled_features, logits
+        return logits
+
 
 class ProgressiveFCN(nn.Module):
-    def __init__(self, channels=2, chan_1=128, chan_2=256, chan_3=128, ks1=51, ks2=25, ks3=13, dropout_prob=0.5):
+    def __init__(self, channels=6, chan_1=32, chan_2=64, chan_3=32, ks1=201, ks2=101, ks3=51, dropout_prob=0.2):
         super(ProgressiveFCN, self).__init__()
 
         pd1 = (ks1 - 1) // 2
@@ -76,33 +72,46 @@ class ProgressiveFCN(nn.Module):
             nn.AdaptiveMaxPool1d(1),
         )
 
-        self.classifier = nn.Sequential(nn.Dropout(dropout_prob), nn.Linear(64, 1))
-
         self.signal_feature = nn.Sequential(
-            nn.Linear(128, 64), nn.BatchNorm1d(64), nn.ReLU(), nn.Dropout(dropout_prob)
+            nn.Linear(32, 16), nn.BatchNorm1d(16), nn.ReLU(), nn.Dropout(dropout_prob)
         )
 
-
-    def forward(self, signal, random_s):
+    def forward(self, signal):
         signal = self.convs(signal).squeeze(-1)
-        signal = signal.view(-1, signal.size(1))
         s_f = self.signal_feature(signal)
 
-        random_s = self.convs(random_s).squeeze(-1)
-        random_s = random_s.view(-1, random_s.size(1))
-        random_s = self.signal_feature(random_s)
-        return self.classifier(s_f), s_f, random_s
+        return s_f
+
 
 class FinetuneCNNModel(nn.Module):
-    def __init__(self, backbone, pretrained):
+    def __init__(self, backbone):
         super(FinetuneCNNModel, self).__init__()
         self.backbone = backbone
-        self.fcn_head = ProgressiveFCN()
-        self.pretrained = pretrained
 
-    def forward(self, x, random_s):
-        features = self.encoder(x)
-        pooled_features = torch.mean(features, dim=1)
-        logits = self.classifier(pooled_features)
+        fcn_input_dim = 6 * 512
+        fcn_output_dim = 64
 
-        return pooled_features, logits
+        self.fcn = nn.Sequential(
+            nn.Linear(fcn_input_dim, 256),
+            nn.ReLU(inplace=True),
+            nn.Dropout(0.5),
+            nn.Linear(256, fcn_output_dim)
+        )
+
+        self.fcn_head = fcn()
+
+        self.classifier = nn.Linear(64, 1)
+
+    def forward(self, x):
+        features = self.backbone(x)  # [B, 6, 512]
+        flattened_features = features.view(features.size(0), -1)
+
+        encoder_output = self.fcn(flattened_features)
+
+        resnet_features = self.fcn_head(x)
+
+        combined_features = torch.cat([encoder_output, resnet_features], dim=1)
+
+        logits = self.classifier(resnet_features)
+
+        return logits
