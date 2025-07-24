@@ -47,6 +47,9 @@ def get_args():
     # parser.add_argument("--local_rank", type=int, default=-1, help="Local rank for distributed training")
     parser.add_argument("--num_workers", type=int, default=16, help="Number of workers for data loading.")
     parser.add_argument("--load_weights", type=bool, default=True, help="Load newest weights.")
+    parser.add_argument("--pha_weight", type=float, default=0.1, help="Weights of phase.")
+    parser.add_argument("--amp_weight", type=float, default=0.1, help="Weights of amplitude.")
+
 
     return parser.parse_args()
 
@@ -196,7 +199,7 @@ if __name__ == '__main__':
                 loss_amp = calculate_rec_loss(student_amp, amp_x1)
                 loss_pha = calculate_rec_loss(student_pha, pha_x1)
                 EMA_loss = self_distill_loss(student_feature, teacher_feature)
-                loss = 0.1 * loss_amp + 0.1 * loss_pha + EMA_loss
+                loss = args.amp_weight * loss_amp + args.pha_weight * loss_pha + EMA_loss
 
 
             loss = loss.mean()
