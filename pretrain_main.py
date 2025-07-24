@@ -245,7 +245,7 @@ if __name__ == '__main__':
 
         torch.save(
             {'model_state_dict': teacher_to_save.state_dict()},
-            f'{args.model_save_path}/{args.backbone}_teacher_{args.window_size}_{epoch}.pth'
+            f'{args.model_save_path}/{args.backbone}_teacher_{args.window_size}_{args.pha_weight}_{args.amp_weight}_{epoch}.pth'
         )
 
         # torch.save(
