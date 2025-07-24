@@ -242,10 +242,10 @@ if __name__ == '__main__':
 
         torch.save(
             {'model_state_dict': teacher_to_save.state_dict()},
-            f'{args.model_save_path}/{args.backbone}_teacher_{epoch}.pth'
+            f'{args.model_save_path}/{args.backbone}_teacher_{args.window_size}_{epoch}.pth'
         )
 
-        torch.save(
-            {'model_state_dict': model_to_save.state_dict()},
-            f'{args.model_save_path}/{args.backbone}_student_{epoch}.pth'
-        )
+        # torch.save(
+        #     {'model_state_dict': model_to_save.state_dict()},
+        #     f'{args.model_save_path}/{args.backbone}_student_{epoch}.pth'
+        # )
